@@ -33,6 +33,9 @@ export class ai extends Component {
     @property(AudioClip)
     placePieceAudio: AudioClip = null;
 
+    @property(AudioClip)
+    buttonClickAudio: AudioClip = null;
+
     private audioSource: AudioSource = null;
 
     // 棋盘配置
@@ -69,6 +72,13 @@ export class ai extends Component {
     private playPlacePieceSound() {
         if (this.audioSource && this.placePieceAudio) {
             this.audioSource.playOneShot(this.placePieceAudio);
+        }
+    }
+
+    // 播放按钮点击音效
+    private playButtonClickSound() {
+        if (this.audioSource && this.buttonClickAudio) {
+            this.audioSource.playOneShot(this.buttonClickAudio);
         }
     }
 
@@ -376,6 +386,9 @@ export class ai extends Component {
 
     // 重新开始游戏
     onRestartGame() {
+        // 播放按钮音效
+        this.playButtonClickSound();
+        
         // 清除所有棋子
         for (let y = 0; y < this.BOARD_SIZE; y++) {
             for (let x = 0; x < this.BOARD_SIZE; x++) {
@@ -391,6 +404,9 @@ export class ai extends Component {
     // 返回主页按钮点击事件
     onReturnHomeClick() {
         console.log('返回主页按钮被点击');
+        
+        // 播放按钮音效
+        this.playButtonClickSound();
         
         // 清理资源后再跳转
         this.cleanupBeforeSceneChange();

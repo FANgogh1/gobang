@@ -1507,6 +1507,10 @@
       "__uuid__": "40c6e8d0-5053-4240-b8f8-4d38720d3933",
       "__expectedType__": "cc.AudioClip"
     },
+    "buttonClickAudio": {
+      "__uuid__": "414adfcb-90be-4d93-9f5c-bf3025f9d7b6",
+      "__expectedType__": "cc.AudioClip"
+    },
     "_id": "1f7ay26PlGd59/TTbqKHsK"
   },
   {

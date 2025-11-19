@@ -1817,6 +1817,10 @@
     },
     "_enabled": true,
     "__prefab": null,
+    "buttonClickAudio": {
+      "__uuid__": "414adfcb-90be-4d93-9f5c-bf3025f9d7b6",
+      "__expectedType__": "cc.AudioClip"
+    },
     "_id": "e0/QRxqnNOoKMp9E0yeAhK"
   },
   {

@@ -700,7 +700,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "botton",
+    "_name": "button1",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -1026,7 +1026,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "button",
+    "_name": "button2",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {

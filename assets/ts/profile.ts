@@ -74,8 +74,21 @@ export class profile extends Component {
 
     // 检查登录状态
     private checkLoginStatus() {
-        // 由于getUserProfile需要用户主动点击触发，所以这里不自动获取用户信息
-        // 只需要检查是否已登录即可，用户信息需要点击登录按钮获取
+        // 从本地存储读取用户信息
+        const savedUserInfo = this.getStoredUserInfo();
+        if (savedUserInfo) {
+            this.userInfo = savedUserInfo;
+            this.updateUI();
+            
+            // 如果是模拟登录用户或者没有头像URL，设置默认头像
+            if (!this.userInfo.avatarUrl || this.userInfo.isSimulated || this.userInfo.nickName === '示例账号') {
+                this.scheduleOnce(() => {
+                    this.setDefaultAvatar();
+                }, 0.1);
+            }
+            
+            console.log('从本地存储恢复登录状态');
+        }
     }
 
     // 点击登录按钮
@@ -111,6 +124,7 @@ export class profile extends Component {
                 success: (infoRes: any) => {
                     console.log('getUserProfile获取用户信息成功:', infoRes);
                     this.userInfo = infoRes.userInfo;
+                    this.saveUserInfo(this.userInfo); // 保存到本地存储
                     this.updateUI();
                     this.showLoginSuccess('登录成功！');
                 },
@@ -299,11 +313,13 @@ export class profile extends Component {
         // 模拟登录数据
         this.userInfo = {
             nickName: '示例账号',
-            avatarUrl: '', // 这里可以放一个测试头像URL
+            avatarUrl: '', // 空字符串表示使用默认头像
+            isSimulated: true // 添加标识符
         };
 
         // 延迟模拟登录过程
         this.scheduleOnce(() => {
+            this.saveUserInfo(this.userInfo); // 保存到本地存储
             this.updateUI();
             // 直接设置默认头像
             this.setDefaultAvatar();
@@ -316,6 +332,7 @@ export class profile extends Component {
         console.log('退出登录');
         
         this.userInfo = null;
+        this.clearStoredUserInfo(); // 清除本地存储
         
         // 显示登录按钮，隐藏退出按钮和用户信息
         if (this.loginButton) {
@@ -352,6 +369,61 @@ export class profile extends Component {
                 console.log(`场景 ${sceneName} 加载成功`);
             }
         });
+    }
+
+    // 保存用户信息到本地存储
+    private saveUserInfo(userInfo: any) {
+        try {
+            const userInfoStr = JSON.stringify(userInfo);
+            if (this.wx && this.wx.setStorageSync) {
+                // 微信小程序环境
+                this.wx.setStorageSync('userInfo', userInfoStr);
+            } else {
+                // 开发环境或其他环境，使用localStorage
+                localStorage.setItem('userInfo', userInfoStr);
+            }
+            console.log('用户信息已保存到本地存储');
+        } catch (error) {
+            console.error('保存用户信息失败:', error);
+        }
+    }
+
+    // 从本地存储获取用户信息
+    private getStoredUserInfo(): any {
+        try {
+            let userInfoStr = '';
+            if (this.wx && this.wx.getStorageSync) {
+                // 微信小程序环境
+                userInfoStr = this.wx.getStorageSync('userInfo') || '';
+            } else {
+                // 开发环境或其他环境，使用localStorage
+                userInfoStr = localStorage.getItem('userInfo') || '';
+            }
+            
+            if (userInfoStr) {
+                return JSON.parse(userInfoStr);
+            }
+            return null;
+        } catch (error) {
+            console.error('读取用户信息失败:', error);
+            return null;
+        }
+    }
+
+    // 清除本地存储的用户信息
+    private clearStoredUserInfo() {
+        try {
+            if (this.wx && this.wx.removeStorageSync) {
+                // 微信小程序环境
+                this.wx.removeStorageSync('userInfo');
+            } else {
+                // 开发环境或其他环境，使用localStorage
+                localStorage.removeItem('userInfo');
+            }
+            console.log('已清除本地存储的用户信息');
+        } catch (error) {
+            console.error('清除用户信息失败:', error);
+        }
     }
 
     onDestroy() {

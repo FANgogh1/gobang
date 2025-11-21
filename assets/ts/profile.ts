@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, director, Sprite, Label, Button, UITransform, Prefab, instantiate } from 'cc';
+import { _decorator, Component, Node, director, Sprite, Label, Button, UITransform, Prefab, instantiate, SpriteFrame, Texture2D, ImageAsset } from 'cc';
 const { ccclass, property } = _decorator;
 
 // 微信小程序API类型声明
@@ -19,6 +19,9 @@ export class profile extends Component {
 
     @property(Label)
     nicknameLabel: Label = null;
+
+    @property(SpriteFrame)
+    defaultAvatar: SpriteFrame = null;
 
     // 微信小程序API接口
     private wx: any = null;
@@ -160,36 +163,108 @@ export class profile extends Component {
 
         // 使用微信图片加载API
         if (this.wx) {
-            this.wx.downloadFile({
-                url: avatarUrl,
-                success: (downloadRes: any) => {
-                    // 将下载的临时文件转换为图片
-                    this.wx.getFileSystemManager().readFile({
-                        filePath: downloadRes.tempFilePath,
-                        success: (fileRes: any) => {
-                            // 创建图片数据
-                            const imageData = fileRes.data;
-                            // 这里需要根据Cocos Creator的API创建SpriteFrame
-                            console.log('头像加载成功:', downloadRes.tempFilePath);
-                        },
-                        fail: (fileErr: any) => {
-                            console.error('读取头像文件失败:', fileErr);
+            // 方法1：尝试使用wx.createImage加载
+            if (this.wx.createImage) {
+                const image = this.wx.createImage();
+                image.onload = () => {
+                    try {
+                        // 创建ImageAsset
+                        const imageAsset = new ImageAsset(image);
+                        console.log('使用wx.createImage加载成功');
+                        
+                        // 创建Texture2D
+                        const texture = new Texture2D();
+                        texture.image = imageAsset;
+                        
+                        // 创建SpriteFrame
+                        const spriteFrame = new SpriteFrame();
+                        spriteFrame.texture = texture;
+                        
+                        // 设置到Sprite组件
+                        this.avatarSprite.spriteFrame = spriteFrame;
+                        console.log('头像设置成功');
+                    } catch (error) {
+                        console.error('使用wx.createImage创建SpriteFrame失败:', error);
+                        this.tryDownloadMethod(avatarUrl);
+                    }
+                };
+                
+                image.onerror = () => {
+                    console.error('wx.createImage加载失败');
+                    this.tryDownloadMethod(avatarUrl);
+                };
+                
+                image.src = avatarUrl;
+            } else {
+                // 如果没有wx.createImage，使用原来的downloadFile方法
+                this.tryDownloadMethod(avatarUrl);
+            }
+        }
+    }
+    
+    // 备用的下载文件方法
+    private tryDownloadMethod(avatarUrl: string) {
+        if (!this.wx) {
+            this.setDefaultAvatar();
+            return;
+        }
+        
+        this.wx.downloadFile({
+            url: avatarUrl,
+            success: (downloadRes: any) => {
+                // 将下载的临时文件转换为图片
+                this.wx.getFileSystemManager().readFile({
+                    filePath: downloadRes.tempFilePath,
+                    success: (fileRes: any) => {
+                        // 创建图片数据
+                        const imageData = fileRes.data;
+                        console.log('图片数据类型:', typeof imageData);
+                        console.log('图片数据长度:', imageData ? imageData.length : 'undefined');
+                        
+                        try {
+                            // 创建ImageAsset
+                            const imageAsset = new ImageAsset(imageData);
+                            console.log('ImageAsset创建成功');
+                            
+                            // 创建Texture2D
+                            const texture = new Texture2D();
+                            texture.image = imageAsset;
+                            console.log('Texture2D创建成功');
+                            
+                            // 创建SpriteFrame
+                            const spriteFrame = new SpriteFrame();
+                            spriteFrame.texture = texture;
+                            console.log('SpriteFrame创建成功');
+                            
+                            // 设置到Sprite组件
+                            this.avatarSprite.spriteFrame = spriteFrame;
+                            console.log('头像设置成功:', downloadRes.tempFilePath);
+                        } catch (error) {
+                            console.error('创建SpriteFrame失败:', error);
                             this.setDefaultAvatar();
                         }
-                    });
-                },
-                fail: (downloadErr: any) => {
-                    console.error('下载头像失败:', downloadErr);
-                    this.setDefaultAvatar();
-                }
-            });
-        }
+                    },
+                    fail: (fileErr: any) => {
+                        console.error('读取头像文件失败:', fileErr);
+                        this.setDefaultAvatar();
+                    }
+                });
+            },
+            fail: (downloadErr: any) => {
+                console.error('下载头像失败:', downloadErr);
+                this.setDefaultAvatar();
+            }
+        });
     }
 
     // 设置默认头像
     private setDefaultAvatar() {
-        // 可以设置一个默认头像
-        console.log('使用默认头像');
+        if (this.avatarSprite && this.defaultAvatar) {
+            this.avatarSprite.spriteFrame = this.defaultAvatar;
+            console.log('使用默认头像');
+        } else {
+            console.warn('默认头像资源未设置或avatarSprite为空');
+        }
     }
 
     // 显示登录成功提示
@@ -230,6 +305,8 @@ export class profile extends Component {
         // 延迟模拟登录过程
         this.scheduleOnce(() => {
             this.updateUI();
+            // 直接设置默认头像
+            this.setDefaultAvatar();
             this.showLoginSuccess('模拟登录成功！');
         }, 1.0);
     }

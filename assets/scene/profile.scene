@@ -1716,6 +1716,10 @@
       "__uuid__": "52828380-8950-41f8-8134-046ebb0f20d2@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
+    "buttonClickSound": {
+      "__uuid__": "414adfcb-90be-4d93-9f5c-bf3025f9d7b6",
+      "__expectedType__": "cc.AudioClip"
+    },
     "_id": "226+ZGi7NOrYV+OHEHJIj2"
   },
   {

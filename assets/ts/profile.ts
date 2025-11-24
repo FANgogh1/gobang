@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, director, Sprite, Label, Button, UITransform, Prefab, instantiate, SpriteFrame, Texture2D, ImageAsset } from 'cc';
+import { _decorator, Component, Node, director, Sprite, Label, Button, UITransform, Prefab, instantiate, SpriteFrame, Texture2D, ImageAsset, AudioClip } from 'cc';
 const { ccclass, property } = _decorator;
 
 // 微信小程序API类型声明
@@ -22,6 +22,9 @@ export class profile extends Component {
 
     @property(SpriteFrame)
     defaultAvatar: SpriteFrame = null;
+
+    @property(AudioClip)
+    buttonClickSound: AudioClip = null;
 
     // 微信小程序API接口
     private wx: any = null;
@@ -72,6 +75,13 @@ export class profile extends Component {
         this.checkLoginStatus();
     }
 
+    // 播放按钮点击音效
+    private playButtonClickSound() {
+        if (this.buttonClickSound) {
+            this.buttonClickSound.play();
+        }
+    }
+
     // 检查登录状态
     private checkLoginStatus() {
         // 从本地存储读取用户信息
@@ -93,6 +103,7 @@ export class profile extends Component {
 
     // 点击登录按钮
     onLoginClick() {
+        this.playButtonClickSound();
         console.log('登录按钮被点击');
         
         if (!this.wx) {
@@ -329,6 +340,7 @@ export class profile extends Component {
 
     // 退出登录
     onLogoutClick() {
+        this.playButtonClickSound();
         console.log('退出登录');
         
         this.userInfo = null;
@@ -356,6 +368,7 @@ export class profile extends Component {
 
     // 返回主页
     onReturnHomeClick() {
+        this.playButtonClickSound();
         console.log('返回主页');
         this.loadScene('home');
     }

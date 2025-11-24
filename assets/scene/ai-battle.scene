@@ -1511,6 +1511,14 @@
       "__uuid__": "414adfcb-90be-4d93-9f5c-bf3025f9d7b6",
       "__expectedType__": "cc.AudioClip"
     },
+    "victoryAudio": {
+      "__uuid__": "d5d841b3-12b3-4547-b01b-87373b382401",
+      "__expectedType__": "cc.AudioClip"
+    },
+    "defeatAudio": {
+      "__uuid__": "a6057a3e-811c-484c-b4d7-170664a1ecd0",
+      "__expectedType__": "cc.AudioClip"
+    },
     "_id": "1f7ay26PlGd59/TTbqKHsK"
   },
   {

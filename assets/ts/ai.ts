@@ -36,6 +36,12 @@ export class ai extends Component {
     @property(AudioClip)
     buttonClickAudio: AudioClip = null;
 
+    @property(AudioClip)
+    victoryAudio: AudioClip = null;
+
+    @property(AudioClip)
+    defeatAudio: AudioClip = null;
+
     private audioSource: AudioSource = null;
 
     // 棋盘配置
@@ -79,6 +85,20 @@ export class ai extends Component {
     private playButtonClickSound() {
         if (this.audioSource && this.buttonClickAudio) {
             this.audioSource.playOneShot(this.buttonClickAudio);
+        }
+    }
+
+    // 播放胜利音效
+    private playVictorySound() {
+        if (this.audioSource && this.victoryAudio) {
+            this.audioSource.playOneShot(this.victoryAudio);
+        }
+    }
+
+    // 播放失败音效
+    private playDefeatSound() {
+        if (this.audioSource && this.defeatAudio) {
+            this.audioSource.playOneShot(this.defeatAudio);
         }
     }
 
@@ -129,6 +149,7 @@ export class ai extends Component {
             if (this.checkWin(boardX, boardY, PieceType.BLACK)) {
                 this.gameState = GameState.PLAYER_WIN;
                 this.updateStatusText('玩家获胜！');
+                this.playVictorySound();
                 return;
             }
 
@@ -189,6 +210,7 @@ export class ai extends Component {
             if (this.checkWin(move.x, move.y, PieceType.WHITE)) {
                 this.gameState = GameState.AI_WIN;
                 this.updateStatusText('AI获胜！');
+                this.playDefeatSound();
                 return;
             }
 

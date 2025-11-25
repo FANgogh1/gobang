@@ -5,7 +5,8 @@ const { ccclass, property } = _decorator;
 enum PieceType {
     EMPTY = 0,
     BLACK = 1,  // 黑子（玩家1）
-    WHITE = 2   // 白子（玩家2）
+    WHITE = 2,  // 白子（玩家2）
+    RED = 3     // 红子（障碍棋子）
 }
 
 // 游戏状态枚举
@@ -23,6 +24,9 @@ export class funmode extends Component {
 
     @property(Prefab)
     whitePrefab: Prefab = null;
+
+    @property(Prefab)
+    redPrefab: Prefab = null;
 
     @property(Node)
     boardNode: Node = null;
@@ -54,6 +58,12 @@ export class funmode extends Component {
     @property(Node)
     skillButton4: Node = null;  // 玩家2的技能2按钮
 
+    @property(Node)
+    skillButton5: Node = null;  // 玩家1的技能3按钮
+
+    @property(Node)
+    skillButton6: Node = null;  // 玩家2的技能3按钮
+
     @property(Sprite)
     skillButton1Sprite: Sprite = null;  // 玩家1技能1的Sprite
 
@@ -65,6 +75,12 @@ export class funmode extends Component {
 
     @property(Sprite)
     skillButton4Sprite: Sprite = null;  // 玩家2技能2的Sprite
+
+    @property(Sprite)
+    skillButton5Sprite: Sprite = null;  // 玩家1技能3的Sprite
+
+    @property(Sprite)
+    skillButton6Sprite: Sprite = null;  // 玩家2技能3的Sprite
 
     @property(SpriteFrame)
     skillAvailableFrame: SpriteFrame = null;  // 技能可用状态的SpriteFrame
@@ -90,6 +106,8 @@ export class funmode extends Component {
     private player2SkillUsed: boolean = false;  // 玩家2技能是否已使用
     private player1Skill2Used: boolean = false;  // 玩家1技能2是否已使用
     private player2Skill2Used: boolean = false;  // 玩家2技能2是否已使用
+    private player1Skill3Used: boolean = false;  // 玩家1技能3是否已使用
+    private player2Skill3Used: boolean = false;  // 玩家2技能3是否已使用
     private skillUsedThisTurn: boolean = false;  // 本回合是否已使用技能
     private displaySkillActive: boolean = false;  // 显示技能是否激活
     private originalBoard: number[][] = [];  // 保存原始棋盘状态
@@ -201,6 +219,32 @@ export class funmode extends Component {
                 this.skillButton4Sprite.spriteFrame = targetFrame;
             }
         }
+
+        // 技能按钮始终显示，不再根据当前玩家切换
+        if (this.skillButton5) {
+            this.skillButton5.active = true;
+        }
+        // 更新技能5按钮颜色
+        if (this.skillButton5Sprite) {
+            const isUsed = this.player1Skill3Used;
+            const targetFrame = isUsed ? this.skillUsedFrame : this.skillAvailableFrame;
+            if (targetFrame) {
+                this.skillButton5Sprite.spriteFrame = targetFrame;
+            }
+        }
+
+        // 技能按钮始终显示，不再根据当前玩家切换
+        if (this.skillButton6) {
+            this.skillButton6.active = true;
+        }
+        // 更新技能6按钮颜色
+        if (this.skillButton6Sprite) {
+            const isUsed = this.player2Skill3Used;
+            const targetFrame = isUsed ? this.skillUsedFrame : this.skillAvailableFrame;
+            if (targetFrame) {
+                this.skillButton6Sprite.spriteFrame = targetFrame;
+            }
+        }
     }
 
     // 初始化游戏
@@ -223,6 +267,8 @@ export class funmode extends Component {
         this.player2SkillUsed = false;  // 重置技能状态
         this.player1Skill2Used = false;  // 重置技能2状态
         this.player2Skill2Used = false;  // 重置技能2状态
+        this.player1Skill3Used = false;  // 重置技能3状态
+        this.player2Skill3Used = false;  // 重置技能3状态
         this.skillUsedThisTurn = false;
         this.displaySkillActive = false;  // 重置显示技能状态
         this.updateStatusText('开始游戏');
@@ -355,6 +401,11 @@ export class funmode extends Component {
 
     // 检查获胜条件
     private checkWin(x: number, y: number, pieceType: PieceType): boolean {
+        // 红色棋子不能获胜
+        if (pieceType === PieceType.RED) {
+            return false;
+        }
+
         const directions = [
             [0, 1], [1, 0], [1, 1], [1, -1]
         ];
@@ -392,6 +443,7 @@ export class funmode extends Component {
     private checkDraw(): boolean {
         for (let y = 0; y < this.BOARD_SIZE; y++) {
             for (let x = 0; x < this.BOARD_SIZE; x++) {
+                // 只有空位才能继续下棋，红色棋子占据位置但不算空位
                 if (this.board[y][x] === PieceType.EMPTY) {
                     return false;
                 }
@@ -456,6 +508,28 @@ export class funmode extends Component {
         this.useDisplaySkill();
     }
 
+    // 玩家1使用技能3（红化技能）
+    onPlayer1Skill3Click() {
+        if (this.currentPlayer !== PieceType.BLACK || this.player1Skill3Used || this.skillUsedThisTurn || this.gameState !== GameState.PLAYING) {
+            return;
+        }
+
+        console.log('玩家1使用技能3：封印术');
+        this.playButtonClickSound();
+        this.useRedSkill();
+    }
+
+    // 玩家2使用技能3（红化技能）
+    onPlayer2Skill3Click() {
+        if (this.currentPlayer !== PieceType.WHITE || this.player2Skill3Used || this.skillUsedThisTurn || this.gameState !== GameState.PLAYING) {
+            return;
+        }
+
+        console.log('玩家2使用技能3：封印术');
+        this.playButtonClickSound();
+        this.useRedSkill();
+    }
+
     // 使用互换技能
     private useSwapSkill() {
         // 标记技能已使用
@@ -501,6 +575,27 @@ export class funmode extends Component {
         // 更新UI
         const playerName = this.currentPlayer === PieceType.BLACK ? '黑子' : '白子';
         this.updateStatusText(`蒙蔽双眼！${playerName}回合`);
+        this.updateSkillButtons();
+    }
+
+    // 使用红化技能
+    private useRedSkill() {
+        // 标记技能已使用
+        if (this.currentPlayer === PieceType.BLACK) {
+            this.player1Skill3Used = true;
+        } else {
+            this.player2Skill3Used = true;
+        }
+
+        // 执行棋子红化
+        this.redPieces();
+
+        // 切换到另一个玩家
+        this.currentPlayer = this.currentPlayer === PieceType.BLACK ? PieceType.WHITE : PieceType.BLACK;
+
+        // 更新UI
+        const playerName = this.currentPlayer === PieceType.BLACK ? '黑子' : '白子';
+        this.updateStatusText(`封印术！${playerName}回合`);
         this.updateSkillButtons();
     }
 
@@ -586,6 +681,26 @@ export class funmode extends Component {
                     if (this.pieces[y][x] && this.blackPrefab) {
                         this.pieces[y][x].destroy();
                         const newPiece = instantiate(this.blackPrefab);
+                        const worldPos = this.boardToWorldPosition(x, y);
+                        newPiece.setPosition(worldPos);
+                        this.boardNode.addChild(newPiece);
+                        this.pieces[y][x] = newPiece;
+                    }
+                }
+            }
+        }
+    }
+
+    // 棋子红化实现
+    private redPieces() {
+        for (let y = 0; y < this.BOARD_SIZE; y++) {
+            for (let x = 0; x < this.BOARD_SIZE; x++) {
+                if (this.board[y][x] === PieceType.BLACK || this.board[y][x] === PieceType.WHITE) {
+                    this.board[y][x] = PieceType.RED;
+                    // 更新棋子预制体为红色
+                    if (this.pieces[y][x] && this.redPrefab) {
+                        this.pieces[y][x].destroy();
+                        const newPiece = instantiate(this.redPrefab);
                         const worldPos = this.boardToWorldPosition(x, y);
                         newPiece.setPosition(worldPos);
                         this.boardNode.addChild(newPiece);

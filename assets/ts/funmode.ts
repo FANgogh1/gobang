@@ -418,7 +418,7 @@ export class funmode extends Component {
             return;
         }
 
-        console.log('玩家1使用技能：棋子互换');
+        console.log('玩家1使用技能：扭转乾坤');
         this.playButtonClickSound();
         this.useSwapSkill();
     }
@@ -429,7 +429,7 @@ export class funmode extends Component {
             return;
         }
 
-        console.log('玩家2使用技能：棋子互换');
+        console.log('玩家2使用技能：扭转乾坤');
         this.playButtonClickSound();
         this.useSwapSkill();
     }
@@ -440,7 +440,7 @@ export class funmode extends Component {
             return;
         }
 
-        console.log('玩家1使用技能2：棋盘显示');
+        console.log('玩家1使用技能2：蒙蔽双眼');
         this.playButtonClickSound();
         this.useDisplaySkill();
     }
@@ -451,7 +451,7 @@ export class funmode extends Component {
             return;
         }
 
-        console.log('玩家2使用技能2：棋盘显示');
+        console.log('玩家2使用技能2：蒙蔽双眼');
         this.playButtonClickSound();
         this.useDisplaySkill();
     }
@@ -473,7 +473,7 @@ export class funmode extends Component {
 
         // 更新UI
         const playerName = this.currentPlayer === PieceType.BLACK ? '黑子' : '白子';
-        this.updateStatusText(`互换技能！轮到${playerName}回合`);
+        this.updateStatusText(`扭转乾坤！${playerName}回合`);
         this.updateSkillButtons();
     }
 
@@ -500,7 +500,7 @@ export class funmode extends Component {
 
         // 更新UI
         const playerName = this.currentPlayer === PieceType.BLACK ? '黑子' : '白子';
-        this.updateStatusText(`显示技能激活！${playerName}回合`);
+        this.updateStatusText(`蒙蔽双眼！${playerName}回合`);
         this.updateSkillButtons();
     }
 

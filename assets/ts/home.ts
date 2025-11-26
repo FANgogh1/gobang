@@ -168,6 +168,13 @@ export class home extends Component {
         this.loadScene('profile');
     }
 
+    // 在线对战按钮点击事件
+    onOnlineBattleButtonClick() {
+        console.log('在线对战按钮被点击');
+        this.playButtonClickSound();
+        this.loadScene('online');
+    }
+
     // 音乐开关按钮点击事件
     onMusicToggleClick() {
         console.log('音乐开关按钮被点击');

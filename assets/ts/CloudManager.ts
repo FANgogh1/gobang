@@ -1,0 +1,425 @@
+import { _decorator, Component } from 'cc';
+const { ccclass, property } = _decorator;
+
+declare global {
+    interface Window {
+        wx: any;
+        cloud: any;
+    }
+}
+
+export interface RoomData {
+    _id?: string; // 云数据库自动生成的ID
+    roomId: string;
+    hostId: string;
+    guestId?: string;
+    gameState: number[][];
+    currentPlayer: number;
+    gameStatus: 'waiting' | 'playing' | 'finished';
+    winner?: number;
+    createTime: number;
+}
+
+export interface PlayerData {
+    playerId: string;
+    nickname: string;
+    avatar: string;
+    score: number;
+}
+
+@ccclass('CloudManager')
+export class CloudManager extends Component {
+    private static instance: CloudManager = null;
+    private initialized: boolean = false;
+    private db: any = null;
+    private userDb: any = null;
+    private roomDb: any = null;
+
+    constructor() {
+        super();
+    }
+
+    // 云环境配置
+    private envConfig = {
+        envId: 'cloud1-1gflc1ng414b1843', // 你的云环境ID
+        traceUser: true
+    };
+
+    public static getInstance(): CloudManager {
+        return CloudManager.instance;
+    }
+
+    async start() {
+        CloudManager.instance = this;
+        await this.initCloud();
+    }
+
+    // 初始化云开发
+    async initCloud() {
+        try {
+            if (typeof window !== 'undefined' && window.wx && window.wx.cloud) {
+                console.log('正在初始化微信云开发...');
+                
+                // 首先初始化云开发
+                window.wx.cloud.init({
+                    env: this.envConfig.envId,
+                    traceUser: this.envConfig.traceUser
+                });
+                
+                console.log('云开发初始化完成');
+                
+                // 等待一下确保云开发API可用
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                if (window.wx.cloud.database) {
+                    this.db = window.wx.cloud.database();
+                    this.userDb = this.db.collection('users');
+                    this.roomDb = this.db.collection('rooms');
+                    this.initialized = true;
+                    console.log('微信云开发连接成功');
+                } else {
+                    throw new Error('云开发数据库API不可用');
+                }
+            } else {
+                console.error('未检测到微信环境或云开发API');
+                this.initialized = false;
+            }
+        } catch (error) {
+            console.error('云开发连接失败:', error);
+            this.initialized = false;
+        }
+    }
+
+    // 检查是否已初始化
+    isInitialized(): boolean {
+        return this.initialized;
+    }
+
+    // 用户登录
+    async login(): Promise<string> {
+        try {
+            // 检查云开发是否已初始化
+            if (!this.initialized) {
+                throw new Error('云开发未初始化');
+            }
+            
+            // 优先使用微信登录获取code
+            const wxLoginResult = await window.wx.login();
+            if (wxLoginResult.code) {
+                console.log('微信登录成功，code:', wxLoginResult.code);
+                
+                // 尝试调用云函数获取openid
+                try {
+                    const cloudResult = await window.wx.cloud.callFunction({
+                        name: 'login',
+                        data: { code: wxLoginResult.code }
+                    });
+                    
+                    console.log('云函数调用结果:', cloudResult);
+                    
+                    if (cloudResult.result && cloudResult.result.code === 0) {
+                        console.log('云函数登录成功，openid:', cloudResult.result.data.openid);
+                        
+                        // 检查是否为临时用户ID
+                        if (cloudResult.result.data.temp) {
+                            console.log('使用临时用户ID登录');
+                        }
+                        
+                        return cloudResult.result.data.openid;
+                    } else {
+                        console.error('云函数返回错误:', cloudResult.result);
+                        throw new Error('云函数返回错误: ' + (cloudResult.result?.message || '未知错误'));
+                    }
+                } catch (cloudError) {
+                    console.warn('云函数调用失败，使用登录码作为用户标识:', cloudError);
+                    // 云函数失败时，使用登录码生成用户ID
+                    const userId = 'user_' + wxLoginResult.code;
+                    return userId;
+                }
+            } else {
+                throw new Error('微信登录失败，未获取到code');
+            }
+        } catch (error) {
+            console.error('登录失败:', error);
+            // 最后的回退方案：生成随机ID
+            const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            console.log('使用临时用户ID:', tempId);
+            return tempId;
+        }
+    }
+
+    // 创建房间
+    async createRoom(playerId: string, nickname: string): Promise<string> {
+        try {
+            // 检查该玩家是否已有房间
+            const existingRoom = await this.roomDb.where({
+                hostId: playerId,
+                gameStatus: 'waiting'
+            }).get();
+            
+            if (existingRoom.data.length > 0) {
+                console.log('玩家已有等待中的房间:', existingRoom.data[0].roomId);
+                return existingRoom.data[0].roomId;
+            }
+
+            const roomData: RoomData = {
+                roomId: this.generateRoomId(),
+                hostId: playerId,
+                gameState: Array(15).fill(null).map(() => Array(15).fill(0)),
+                currentPlayer: 1, // 1表示房主先手
+                gameStatus: 'waiting',
+                createTime: Date.now()
+            };
+
+            console.log('创建房间数据:', {
+                roomId: roomData.roomId,
+                hostId: roomData.hostId,
+                gameState: roomData.gameState,
+                gameStateSize: `${roomData.gameState.length}x${roomData.gameState[0]?.length || 0}`,
+                currentPlayer: roomData.currentPlayer,
+                gameStatus: roomData.gameStatus
+            });
+
+            await this.roomDb.add({
+                data: roomData
+            });
+
+            // 同时保存玩家信息
+            await this.userDb.add({
+                data: {
+                    playerId: playerId,
+                    nickname: nickname,
+                    score: 0,
+                    createTime: Date.now()
+                }
+            });
+
+            console.log('房间创建成功:', roomData.roomId);
+            return roomData.roomId;
+        } catch (error) {
+            console.error('创建房间失败:', error);
+            throw error;
+        }
+    }
+
+    // 加入房间
+    async joinRoom(roomId: string, playerId: string, nickname: string): Promise<boolean> {
+        try {
+            console.log('尝试加入房间:', { roomId, playerId, nickname });
+            
+            const room = await this.getRoom(roomId);
+            if (!room) {
+                throw new Error('房间不存在，请检查房间号是否正确');
+            }
+
+            console.log('找到房间，检查状态:', room);
+
+            if (room.gameStatus !== 'waiting') {
+                throw new Error('房间已开始游戏或已满');
+            }
+
+            if (room.guestId && room.guestId !== playerId) {
+                throw new Error('房间已满');
+            }
+
+            // 更新房间信息，添加客机玩家
+            console.log('更新房间信息...');
+            await this.roomDb.doc(room._id).update({
+                data: {
+                    guestId: playerId,
+                    gameStatus: 'playing'
+                }
+            });
+
+            // 保存客机玩家信息
+            console.log('保存玩家信息...');
+            await this.userDb.add({
+                data: {
+                    playerId: playerId,
+                    nickname: nickname,
+                    score: 0,
+                    createTime: Date.now()
+                }
+            });
+
+            console.log('成功加入房间:', roomId);
+            return true;
+        } catch (error) {
+            console.error('加入房间失败:', error);
+            throw error;
+        }
+    }
+
+    // 获取房间信息
+    async getRoom(roomId: string): Promise<RoomData | null> {
+        try {
+            console.log('查找房间:', roomId);
+            
+            if (!this.roomDb) {
+                console.error('房间数据库未初始化');
+                throw new Error('房间数据库未初始化');
+            }
+            
+            const result = await this.roomDb.where({
+                roomId: roomId
+            }).get();
+
+            console.log('房间查询结果:', {
+                roomId: roomId,
+                foundCount: result.data.length,
+                data: result.data
+            });
+
+            if (result.data.length > 0) {
+                console.log('找到房间:', result.data[0]);
+                return result.data[0] as RoomData;
+            }
+            
+            console.log('房间不存在:', roomId);
+            return null;
+        } catch (error) {
+            console.error('获取房间信息失败:', error);
+            throw error;
+        }
+    }
+
+    // 监听房间状态变化
+    watchRoom(roomId: string, callback: (room: RoomData | null) => void) {
+        try {
+            console.log('开始监听房间:', roomId);
+            
+            // 先获取当前房间状态
+            this.getRoom(roomId).then(currentRoom => {
+                if (currentRoom) {
+                    console.log('获取到当前房间状态，触发回调:', currentRoom);
+                    callback(currentRoom);
+                }
+            });
+            
+            // 设置实时监听
+            const watcher = this.roomDb.where({
+                roomId: roomId
+            }).watch({
+                onChange: (snapshot: any) => {
+                    console.log('房间监听回调:', {
+                        roomId: roomId,
+                        docsCount: snapshot.docs.length,
+                        snapshotType: snapshot.type,
+                        changes: snapshot.type
+                    });
+                    
+                    if (snapshot.docs.length > 0) {
+                        const roomData = snapshot.docs[0].data;
+                        console.log('房间数据更新:', roomData);
+                        callback(roomData as RoomData);
+                    } else {
+                        console.log('房间数据为空，可能房间已被删除');
+                        callback(null);
+                    }
+                },
+                onError: (error: any) => {
+                    console.error('监听房间失败:', error);
+                    // 发生错误时也传递null，让前端处理
+                    callback(null);
+                }
+            });
+            
+            // 5秒后检查监听是否正常工作
+            setTimeout(() => {
+                console.log('检查房间监听状态...');
+                this.getRoom(roomId).then(latestRoom => {
+                    if (latestRoom) {
+                        console.log('5秒后检查，当前房间状态:', latestRoom);
+                        callback(latestRoom);
+                    }
+                });
+            }, 5000);
+            
+            return watcher;
+        } catch (error) {
+            console.error('设置房间监听失败:', error);
+            callback(null);
+            return null;
+        }
+    }
+
+    // 更新游戏状态
+    async updateGameState(roomId: string, gameState: number[][], currentPlayer: number) {
+        try {
+            await this.roomDb.where({
+                roomId: roomId
+            }).update({
+                data: {
+                    gameState: gameState,
+                    currentPlayer: currentPlayer
+                }
+            });
+        } catch (error) {
+            console.error('更新游戏状态失败:', error);
+        }
+    }
+
+    // 结束游戏
+    async finishGame(roomId: string, winner: number) {
+        try {
+            await this.roomDb.where({
+                roomId: roomId
+            }).update({
+                data: {
+                    gameStatus: 'finished',
+                    winner: winner
+                }
+            });
+        } catch (error) {
+            console.error('结束游戏失败:', error);
+        }
+    }
+
+    // 生成房间ID
+    private generateRoomId(): string {
+        // 使用时间戳+随机数确保唯一性
+        const timestamp = Date.now().toString(36).substr(-4);
+        const random = Math.random().toString(36).substr(2, 4).toUpperCase();
+        return (timestamp + random).toUpperCase();
+    }
+
+    // 获取随机房间（匹配功能）
+    async getRandomRoom(): Promise<RoomData | null> {
+        try {
+            const result = await this.roomDb.where({
+                gameStatus: 'waiting'
+            }).limit(1).get();
+
+            if (result.data.length > 0) {
+                return result.data[0] as RoomData;
+            }
+            return null;
+        } catch (error) {
+            console.error('获取随机房间失败:', error);
+            return null;
+        }
+    }
+
+    // 离开房间
+    async leaveRoom(roomId: string, playerId: string) {
+        try {
+            const room = await this.getRoom(roomId);
+            if (!room || !room._id) return;
+
+            if (room.hostId === playerId) {
+                // 房主离开，删除房间
+                await this.roomDb.doc(room._id).remove();
+            } else if (room.guestId === playerId) {
+                // 客机离开，重置房间状态
+                await this.roomDb.doc(room._id).update({
+                    data: {
+                        guestId: '',
+                        gameStatus: 'waiting'
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('离开房间失败:', error);
+        }
+    }
+}

@@ -433,7 +433,7 @@ export class online extends Component {
             return;
         }
         
-        // 更新棋盘状态
+        // 更新棋盘状态（始终更新，包括游戏结束时）
         this.board = room.gameState;
         this.updateBoardDisplay();
         
@@ -444,13 +444,19 @@ export class online extends Component {
         this.isMyTurn = (this.playerRole === 1 && this.currentPlayer === 1) || 
                        (this.playerRole === 2 && this.currentPlayer === 2);
         
-        // 更新游戏状态
+        // 更新游戏状态显示
         if (room.gameStatus === 'finished') {
             this.gameState = room.winner === this.playerRole ? GameState.PLAYER1_WIN : GameState.PLAYER2_WIN;
-            this.updateStatusText(room.winner === this.playerRole ? '你赢了！' : '你输了！');
+            const winnerText = room.winner === this.playerRole ? '你赢了！' : '你输了！';
+            this.updateStatusText(winnerText);
+            
+            // 确保最终的棋盘状态被正确显示
+            console.log('游戏结束，最终棋盘状态已更新');
         } else if (room.gameStatus === 'playing') {
             const myColor = this.playerRole === 1 ? '黑子' : '白子';
             this.updateStatusText(this.isMyTurn ? `轮到你了（${myColor}）` : `等待对手落子`);
+        } else if (room.gameStatus === 'waiting') {
+            this.updateStatusText('等待对手加入...');
         }
     }
 
@@ -461,6 +467,8 @@ export class online extends Component {
             console.warn('棋盘数据无效，无法更新显示');
             return;
         }
+        
+        console.log('更新棋盘显示，当前棋盘状态:', this.board);
         
         // 清除现有棋子
         for (let y = 0; y < this.BOARD_SIZE; y++) {
@@ -475,7 +483,8 @@ export class online extends Component {
                     this.pieces[y][x] = null;
                 }
                 
-                if (this.pieces[y][x]) {
+                // 销毁现有棋子
+                if (this.pieces[y][x] && this.pieces[y][x].isValid) {
                     this.pieces[y][x].destroy();
                     this.pieces[y][x] = null;
                 }
@@ -489,10 +498,37 @@ export class online extends Component {
                         pieceNode.setPosition(worldPos);
                         this.boardNode.addChild(pieceNode);
                         this.pieces[y][x] = pieceNode;
+                        
+                        // 记录创建的棋子，便于调试
+                        if (this.board[y][x] === PieceType.BLACK) {
+                            console.log(`创建黑子 at (${x}, ${y})`);
+                        } else {
+                            console.log(`创建白子 at (${x}, ${y})`);
+                        }
                     }
                 }
             }
         }
+        
+        console.log('棋盘更新完成，棋子数量统计:', this.countPieces());
+    }
+    
+    // 统计棋子数量（用于调试）
+    private countPieces(): { black: number; white: number } {
+        let blackCount = 0;
+        let whiteCount = 0;
+        
+        for (let y = 0; y < this.BOARD_SIZE; y++) {
+            for (let x = 0; x < this.BOARD_SIZE; x++) {
+                if (this.board[y] && this.board[y][x] === PieceType.BLACK) {
+                    blackCount++;
+                } else if (this.board[y] && this.board[y][x] === PieceType.WHITE) {
+                    whiteCount++;
+                }
+            }
+        }
+        
+        return { black: blackCount, white: whiteCount };
     }
 
     // 棋盘点击事件
@@ -528,6 +564,10 @@ export class online extends Component {
             this.playPlacePieceSound();
         }
 
+        // 先更新游戏状态，确保最后一颗棋子被同步
+        const nextPlayer = this.currentPlayer === PieceType.BLACK ? PieceType.WHITE : PieceType.BLACK;
+        await this.cloudManager.updateGameState(this.roomId, this.board, nextPlayer);
+
         // 检查获胜
         if (this.checkWin(x, y, this.currentPlayer)) {
             await this.cloudManager.finishGame(this.roomId, this.playerRole);
@@ -539,10 +579,6 @@ export class online extends Component {
             await this.cloudManager.finishGame(this.roomId, 0); // 0表示平局
             return;
         }
-
-        // 切换玩家
-        const nextPlayer = this.currentPlayer === PieceType.BLACK ? PieceType.WHITE : PieceType.BLACK;
-        await this.cloudManager.updateGameState(this.roomId, this.board, nextPlayer);
     }
 
     // 检查获胜

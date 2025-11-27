@@ -362,14 +362,29 @@ export class CloudManager extends Component {
     // 结束游戏
     async finishGame(roomId: string, winner: number) {
         try {
+            console.log('结束游戏:', { roomId, winner });
+            
+            // 首先获取当前房间的完整状态
+            const room = await this.getRoom(roomId);
+            if (!room) {
+                console.error('房间不存在，无法结束游戏');
+                return;
+            }
+            
+            // 更新游戏状态，保持当前的棋盘状态和玩家状态
             await this.roomDb.where({
                 roomId: roomId
             }).update({
                 data: {
                     gameStatus: 'finished',
-                    winner: winner
+                    winner: winner,
+                    // 确保棋盘状态和当前玩家状态保持最新
+                    gameState: room.gameState,
+                    currentPlayer: room.currentPlayer
                 }
             });
+            
+            console.log('游戏状态已更新为finished，获胜者:', winner);
         } catch (error) {
             console.error('结束游戏失败:', error);
         }

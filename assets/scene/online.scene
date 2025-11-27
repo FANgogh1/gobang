@@ -529,8 +529,8 @@
     "_prefab": null,
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -266.326,
-      "y": 591.445,
+      "x": -270,
+      "y": 600,
       "z": 0
     },
     "_lrot": {
@@ -616,8 +616,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 100,
-      "height": 40
+      "width": 120,
+      "height": 50.4
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -649,11 +649,11 @@
     "_string": "创建房间",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 30,
+    "_fontSize": 30,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
-    "_overflow": 1,
+    "_overflow": 0,
     "_enableWrapText": false,
     "_font": null,
     "_isSystemFontUsed": true,
@@ -700,8 +700,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 100,
-      "height": 40
+      "width": 120,
+      "height": 60
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -731,7 +731,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+      "__uuid__": "12f2add7-4c3b-4833-bd23-0cd0927f4d3e@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 1,
@@ -795,7 +795,7 @@
       "a": 255
     },
     "_normalSprite": {
-      "__uuid__": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+      "__uuid__": "12f2add7-4c3b-4833-bd23-0cd0927f4d3e@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_hoverSprite": {
@@ -855,8 +855,8 @@
     "_prefab": null,
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -264.331,
-      "y": 526.602,
+      "x": -270,
+      "y": 530,
       "z": 0
     },
     "_lrot": {
@@ -942,8 +942,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 100,
-      "height": 40
+      "width": 120,
+      "height": 50.4
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -975,11 +975,11 @@
     "_string": "加入房间",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 20,
-    "_fontSize": 20,
+    "_actualFontSize": 30,
+    "_fontSize": 30,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
-    "_overflow": 1,
+    "_overflow": 0,
     "_enableWrapText": false,
     "_font": null,
     "_isSystemFontUsed": true,
@@ -1026,8 +1026,8 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 100,
-      "height": 40
+      "width": 120,
+      "height": 60
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -1057,7 +1057,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+      "__uuid__": "12f2add7-4c3b-4833-bd23-0cd0927f4d3e@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 1,
@@ -1121,7 +1121,7 @@
       "a": 255
     },
     "_normalSprite": {
-      "__uuid__": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+      "__uuid__": "12f2add7-4c3b-4833-bd23-0cd0927f4d3e@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_hoverSprite": {
@@ -1166,7 +1166,7 @@
         "__id__": 29
       }
     ],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 32
@@ -1500,8 +1500,8 @@
     "_prefab": null,
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -258.374,
-      "y": 458.889,
+      "x": 0,
+      "y": -580,
       "z": 0
     },
     "_lrot": {
@@ -1851,7 +1851,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": -150,
-      "y": -500,
+      "y": -470,
       "z": 0
     },
     "_lrot": {
@@ -2177,7 +2177,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 150,
-      "y": -500,
+      "y": -470,
       "z": 0
     },
     "_lrot": {

@@ -75,6 +75,7 @@ export class online extends Component {
     private playerId: string = '';
     private playerRole: number = 0; // 1表示房主（黑子），2表示客机（白子）
     private isMyTurn: boolean = false;
+    private isShowingDialog: boolean = false; // 防止多次显示输入对话框的标志
 
     async start() {
         this.initAudioSource();
@@ -263,15 +264,20 @@ export class online extends Component {
 
     // 加入房间
     private async onJoinRoomClick() {
-        // 显示输入房间号的对话框
-        const roomId = await this.showRoomInputDialog();
-        
-        if (!roomId) {
-            // 用户取消输入
-            return;
+        // 防止重复点击
+        if (this.joinRoomBtn) {
+            this.joinRoomBtn.interactable = false;
         }
         
         try {
+            // 显示输入房间号的对话框
+            const roomId = await this.showRoomInputDialog();
+            
+            if (!roomId) {
+                // 用户取消输入
+                return;
+            }
+            
             this.playButtonClickSound();
             this.updateStatusText('正在加入房间...');
             
@@ -292,37 +298,59 @@ export class online extends Component {
         } catch (error) {
             this.updateStatusText('加入房间失败: ' + (error.message || '房间不存在'));
             console.error('加入房间失败:', error);
+        } finally {
+            // 重新启用按钮
+            if (this.joinRoomBtn) {
+                this.joinRoomBtn.interactable = true;
+            }
         }
     }
 
     // 显示输入房间号的对话框
     private showRoomInputDialog(): Promise<string> {
+        // 防止重复显示对话框
+        if (this.isShowingDialog) {
+            console.log('对话框已在显示中，忽略重复调用');
+            return Promise.resolve(null);
+        }
+        
+        this.isShowingDialog = true;
+        
         return new Promise((resolve) => {
-            if (typeof window !== 'undefined' && window.wx && window.wx.showModal) {
-                // 使用微信小程序的模态框
-                window.wx.showModal({
-                    title: '加入房间',
-                    editable: true,
-                    placeholderText: '请输入房间号',
-                    success: (res) => {
-                        if (res.confirm && res.content) {
-                            resolve(res.content.trim().toUpperCase());
-                        } else {
+            try {
+                if (typeof window !== 'undefined' && window.wx && window.wx.showModal) {
+                    // 使用微信小程序的模态框
+                    window.wx.showModal({
+                        title: '加入房间',
+                        editable: true,
+                        placeholderText: '请输入房间号',
+                        success: (res) => {
+                            this.isShowingDialog = false;
+                            if (res.confirm && res.content) {
+                                resolve(res.content.trim().toUpperCase());
+                            } else {
+                                resolve(null);
+                            }
+                        },
+                        fail: () => {
+                            this.isShowingDialog = false;
                             resolve(null);
                         }
-                    },
-                    fail: () => {
+                    });
+                } else {
+                    // 非微信环境，使用原生prompt
+                    const roomId = prompt('请输入房间号:', '');
+                    this.isShowingDialog = false;
+                    if (roomId) {
+                        resolve(roomId.trim().toUpperCase());
+                    } else {
                         resolve(null);
                     }
-                });
-            } else {
-                // 非微信环境，使用原生prompt
-                const roomId = prompt('请输入房间号:', '');
-                if (roomId) {
-                    resolve(roomId.trim().toUpperCase());
-                } else {
-                    resolve(null);
                 }
+            } catch (error) {
+                console.error('显示输入对话框时发生错误:', error);
+                this.isShowingDialog = false;
+                resolve(null);
             }
         });
     }

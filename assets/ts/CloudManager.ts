@@ -390,6 +390,42 @@ export class CloudManager extends Component {
         }
     }
 
+    // 重置游戏状态（重新开始）
+    async resetGameState(roomId: string, gameState: number[][], currentPlayer: number) {
+        try {
+            console.log('重置游戏状态:', { roomId, currentPlayer });
+            
+            // 先获取当前房间数据
+            const currentRoom = await this.getRoom(roomId);
+            if (!currentRoom) {
+                console.error('房间不存在，无法重置游戏状态');
+                return;
+            }
+
+            // 简化更新数据，只更新必要字段
+            const updateData = {
+                gameState: gameState,
+                currentPlayer: currentPlayer,
+                gameStatus: 'playing'
+            };
+
+            // 如果有winner字段，设置为null而不是移除字段
+            if (currentRoom.winner !== undefined) {
+                updateData.winner = null;
+            }
+
+            await this.roomDb.where({
+                roomId: roomId
+            }).update({
+                data: updateData
+            });
+            
+            console.log('游戏状态已重置为playing');
+        } catch (error) {
+            console.error('重置游戏状态失败:', error);
+        }
+    }
+
     // 生成房间ID
     private generateRoomId(): string {
         // 使用时间戳+随机数确保唯一性

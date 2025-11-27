@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Prefab, instantiate, Vec3, UITransform, RichText, AudioClip, AudioSource, director, Label, Button } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Vec3, UITransform, RichText, AudioClip, AudioSource, director, Director, Label, Button } from 'cc';
 import { CloudManager, RoomData } from './CloudManager';
 
 const { ccclass, property } = _decorator;
@@ -76,9 +76,25 @@ export class online extends Component {
     private playerRole: number = 0; // 1表示房主（黑子），2表示客机（白子）
     private isMyTurn: boolean = false;
     private isShowingDialog: boolean = false; // 防止多次显示输入对话框的标志
+    private isResettingGame: boolean = false; // 防止重置过程中重复操作
+    private isCreatingRoom: boolean = false; // 防止重复创建房间
+    private isInitialized: boolean = false; // 防止重复初始化
 
     async start() {
+        // 防止重复初始化
+        if (this.isInitialized) {
+            console.log('组件已初始化，跳过重复初始化');
+            return;
+        }
+
+        this.isInitialized = true;
+        
         this.initAudioSource();
+        
+        // 添加场景变化监听器
+        director.on(Director.EVENT_BEFORE_SCENE_LAUNCH, () => {
+            console.log('!!! 场景即将切换 !!!');
+        }, this);
         
         // 创建CloudManager实例
         const cloudNode = new Node('CloudManager');
@@ -151,7 +167,11 @@ export class online extends Component {
         // 先移除现有的监听器，防止重复绑定
         if (this.createRoomBtn) {
             this.createRoomBtn.node.off(Button.EventType.CLICK, this.onCreateRoomClick, this);
-            this.createRoomBtn.node.on(Button.EventType.CLICK, this.onCreateRoomClick, this);
+            this.createRoomBtn.node.on(Button.EventType.CLICK, () => {
+                console.log('创建房间按钮被点击');
+                this.onCreateRoomClick();
+            }, this);
+            console.log('创建房间按钮已绑定到 onCreateRoomClick');
         }
         if (this.joinRoomBtn) {
             this.joinRoomBtn.node.off(Button.EventType.CLICK, this.onJoinRoomClick, this);
@@ -163,11 +183,19 @@ export class online extends Component {
         }
         if (this.restartBtn) {
             this.restartBtn.node.off(Button.EventType.CLICK, this.onRestartClick, this);
-            this.restartBtn.node.on(Button.EventType.CLICK, this.onRestartClick, this);
+            this.restartBtn.node.on(Button.EventType.CLICK, () => {
+                console.log('重新开始按钮被点击');
+                this.onRestartClick();
+            }, this);
+            console.log('重新开始按钮已绑定到 onRestartClick');
         }
         if (this.returnHomeBtn) {
             this.returnHomeBtn.node.off(Button.EventType.CLICK, this.onReturnHomeClick, this);
-            this.returnHomeBtn.node.on(Button.EventType.CLICK, this.onReturnHomeClick, this);
+            this.returnHomeBtn.node.on(Button.EventType.CLICK, () => {
+                console.log('返回主页按钮被点击');
+                this.onReturnHomeClick();
+            }, this);
+            console.log('返回主页按钮已绑定到 onReturnHomeClick');
         }
 
         if (this.boardNode) {
@@ -222,6 +250,9 @@ export class online extends Component {
 
     // 创建房间
     private async onCreateRoomClick() {
+        console.log('=== onCreateRoomClick 被调用 ===');
+        console.log('当前状态 - roomId:', this.roomId, 'isCreatingRoom:', this.isCreatingRoom);
+        
         // 防止重复创建房间
         if (this.roomId && this.roomId !== '') {
             console.log('已存在房间，跳过重复创建:', this.roomId);
@@ -229,11 +260,19 @@ export class online extends Component {
             return;
         }
         
+        // 防止重复点击
+        if (this.isCreatingRoom) {
+            console.log('正在创建房间中，忽略重复点击');
+            return;
+        }
+        
+        this.isCreatingRoom = true;
+        
         try {
             console.log('开始创建房间...');
             this.playButtonClickSound();
             
-            // 禁用按钮，防止重复点击
+            // 立即禁用按钮，防止重复点击
             if (this.createRoomBtn) {
                 this.createRoomBtn.interactable = false;
             }
@@ -259,6 +298,8 @@ export class online extends Component {
             if (this.createRoomBtn) {
                 this.createRoomBtn.interactable = true;
             }
+            this.isCreatingRoom = false;
+            console.log('=== onCreateRoomClick 完成，isCreatingRoom 重置为 false ===');
         }
     }
 
@@ -673,34 +714,144 @@ export class online extends Component {
         }
     }
 
+    // 在房间内重置游戏状态
+    private async resetGameInRoom() {
+        try {
+            // 检查房间是否存在
+            if (!this.roomId || !this.cloudManager) {
+                console.warn('房间不存在或CloudManager未初始化，无法重置游戏');
+                return;
+            }
+
+            // 先验证房间是否仍然有效
+            const currentRoom = await this.cloudManager.getRoom(this.roomId);
+            if (!currentRoom) {
+                console.warn('房间已不存在，无法重置游戏');
+                return;
+            }
+
+            console.log('开始重置游戏状态，当前房间:', currentRoom);
+
+            // 清空棋盘数据
+            this.board = [];
+            for (let i = 0; i < this.BOARD_SIZE; i++) {
+                this.board[i] = [];
+                for (let j = 0; j < this.BOARD_SIZE; j++) {
+                    this.board[i][j] = PieceType.EMPTY;
+                }
+            }
+
+            // 重置游戏状态
+            this.gameState = GameState.PLAYING;
+            this.currentPlayer = PieceType.BLACK;
+
+            // 根据玩家角色设置回合
+            if (this.playerRole === 1) {
+                // 房主（黑子）先手
+                this.isMyTurn = true;
+            } else {
+                // 客机（白子）后手
+                this.isMyTurn = false;
+            }
+
+            // 清除棋盘上的所有棋子
+            for (let y = 0; y < this.BOARD_SIZE; y++) {
+                for (let x = 0; x < this.BOARD_SIZE; x++) {
+                    if (this.pieces[y] && this.pieces[y][x] && this.pieces[y][x].isValid) {
+                        this.pieces[y][x].destroy();
+                        this.pieces[y][x] = null;
+                    }
+                }
+            }
+
+            // 更新云端的房间状态，包括重置gameStatus为playing
+            console.log('调用云端重置游戏状态');
+            await this.cloudManager.resetGameState(this.roomId, this.board, this.currentPlayer);
+
+            // 更新状态显示
+            const myColor = this.playerRole === 1 ? '黑子' : '白子';
+            this.updateStatusText(this.isMyTurn ? `游戏重新开始，轮到你（${myColor}）` : `游戏重新开始，等待对手落子`);
+
+            console.log('游戏状态重置完成');
+        } catch (error) {
+            console.error('重置游戏状态时发生错误:', error);
+            this.updateStatusText('重置游戏失败，请重试');
+        }
+    }
+
     // 重新开始
     private async onRestartClick() {
-        this.playButtonClickSound();
+        console.log('=== onRestartClick 被调用 ===');
         
-        // 离开当前房间
-        if (this.roomId) {
-            await this.cloudManager.leaveRoom(this.roomId, this.playerId);
+        // 防止重复点击
+        if (this.isResettingGame) {
+            console.log('游戏正在重置中，忽略重复点击');
+            return;
         }
         
-        this.initGame();
-        this.roomId = '';
-        this.playerRole = 0;
-        this.isMyTurn = false;
+        this.isResettingGame = true;
+        this.playButtonClickSound();
         
-        if (this.roomIdLabel) {
-            this.roomIdLabel.string = '';
+        try {
+            // 禁用所有按钮，防止意外点击
+            this.setAllButtonsInteractable(false);
+            
+            // 延迟一小段时间，确保点击事件完全处理完毕
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // 不离开房间，只重置游戏状态
+            console.log('开始调用 resetGameInRoom');
+            await this.resetGameInRoom();
+            console.log('=== onRestartClick 完成 ===');
+        } catch (error) {
+            console.error('重新开始游戏时发生错误:', error);
+        } finally {
+            // 重新启用按钮
+            this.setAllButtonsInteractable(true);
+            this.isResettingGame = false;
         }
     }
 
     // 返回主页
     private onReturnHomeClick() {
+        console.log('!!! onReturnHomeClick 被调用，准备返回主页 !!!');
+        console.log('当前游戏状态 - isResettingGame:', this.isResettingGame);
+        
+        // 如果游戏正在重置，忽略返回主页点击
+        if (this.isResettingGame) {
+            console.log('游戏正在重置中，忽略返回主页点击');
+            return;
+        }
+        
         this.playButtonClickSound();
         
         if (this.roomId) {
             this.cloudManager.leaveRoom(this.roomId, this.playerId);
         }
         
+        console.log('即将加载home场景');
         director.loadScene('home');
+    }
+
+    // 设置所有按钮的交互性
+    private setAllButtonsInteractable(interactable: boolean) {
+        console.log(`设置所有按钮交互性为: ${interactable}`);
+        
+        if (this.createRoomBtn) {
+            this.createRoomBtn.interactable = interactable;
+        }
+        if (this.joinRoomBtn) {
+            this.joinRoomBtn.interactable = interactable;
+        }
+        if (this.matchBtn) {
+            this.matchBtn.interactable = interactable;
+        }
+        if (this.restartBtn) {
+            this.restartBtn.interactable = interactable;
+        }
+        if (this.returnHomeBtn) {
+            this.returnHomeBtn.interactable = interactable;
+        }
     }
 
     onDestroy() {

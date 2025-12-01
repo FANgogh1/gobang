@@ -723,6 +723,12 @@ export class online extends Component {
                 return;
             }
 
+            // 检查CloudManager是否已正确初始化
+            if (!this.cloudManager.isInitialized()) {
+                console.warn('CloudManager未初始化，无法重置游戏');
+                return;
+            }
+
             // 先验证房间是否仍然有效
             const currentRoom = await this.cloudManager.getRoom(this.roomId);
             if (!currentRoom) {
@@ -813,7 +819,7 @@ export class online extends Component {
     }
 
     // 返回主页
-    private onReturnHomeClick() {
+    private async onReturnHomeClick() {
         console.log('!!! onReturnHomeClick 被调用，准备返回主页 !!!');
         console.log('当前游戏状态 - isResettingGame:', this.isResettingGame);
         
@@ -826,7 +832,18 @@ export class online extends Component {
         this.playButtonClickSound();
         
         if (this.roomId) {
-            this.cloudManager.leaveRoom(this.roomId, this.playerId);
+            try {
+                console.log('离开房间:', this.roomId, '玩家ID:', this.playerId, '角色:', this.playerRole === 1 ? '房主' : '客机');
+                await this.cloudManager.leaveRoom(this.roomId, this.playerId);
+                
+                if (this.playerRole === 2) {
+                    console.log('客机玩家已离开房间，房间状态已重置为等待玩家加入');
+                } else {
+                    console.log('房主玩家已离开房间，房间已删除');
+                }
+            } catch (error) {
+                console.error('离开房间时发生错误:', error);
+            }
         }
         
         console.log('即将加载home场景');
@@ -854,17 +871,23 @@ export class online extends Component {
         }
     }
 
-    onDestroy() {
+    async onDestroy() {
         console.log('销毁online组件，清理资源');
         
-        if (this.roomId) {
-            this.cloudManager.leaveRoom(this.roomId, this.playerId);
-        }
-        
-        // 清理定时器
+        // 先清理定时器，避免在资源清理过程中继续执行
         if (this.roomRefreshTimer) {
             clearInterval(this.roomRefreshTimer);
             this.roomRefreshTimer = null;
+        }
+        
+        // 尝试离开房间
+        if (this.roomId && this.cloudManager) {
+            try {
+                await this.cloudManager.leaveRoom(this.roomId, this.playerId);
+            } catch (error) {
+                console.warn('组件销毁时离开房间失败:', error);
+                // 不抛出错误，避免影响组件销毁流程
+            }
         }
         
         // 清理所有事件监听

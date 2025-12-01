@@ -151,6 +151,12 @@ export class CloudManager extends Component {
     // 创建房间
     async createRoom(playerId: string, nickname: string): Promise<string> {
         try {
+            // 检查数据库是否已初始化
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，无法创建房间');
+                throw new Error('房间数据库未初始化');
+            }
+
             // 检查该玩家是否已有房间
             const existingRoom = await this.roomDb.where({
                 hostId: playerId,
@@ -206,6 +212,12 @@ export class CloudManager extends Component {
     async joinRoom(roomId: string, playerId: string, nickname: string): Promise<boolean> {
         try {
             console.log('尝试加入房间:', { roomId, playerId, nickname });
+
+            // 检查数据库是否已初始化
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，无法加入房间');
+                throw new Error('房间数据库未初始化');
+            }
             
             const room = await this.getRoom(roomId);
             if (!room) {
@@ -220,6 +232,12 @@ export class CloudManager extends Component {
 
             if (room.guestId && room.guestId !== playerId) {
                 throw new Error('房间已满');
+            }
+
+            // 再次检查roomDb是否可用（双重保险）
+            if (!this.roomDb) {
+                console.warn('roomDb为null，无法加入房间');
+                throw new Error('房间数据库不可用');
             }
 
             // 更新房间信息，添加客机玩家
@@ -255,9 +273,9 @@ export class CloudManager extends Component {
         try {
             console.log('查找房间:', roomId);
             
-            if (!this.roomDb) {
-                console.error('房间数据库未初始化');
-                throw new Error('房间数据库未初始化');
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，返回null');
+                return null;
             }
             
             const result = await this.roomDb.where({
@@ -287,6 +305,13 @@ export class CloudManager extends Component {
     watchRoom(roomId: string, callback: (room: RoomData | null) => void) {
         try {
             console.log('开始监听房间:', roomId);
+            
+            // 检查数据库是否已初始化
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，无法监听房间');
+                callback(null);
+                return null;
+            }
             
             // 先获取当前房间状态
             this.getRoom(roomId).then(currentRoom => {
@@ -346,6 +371,12 @@ export class CloudManager extends Component {
     // 更新游戏状态
     async updateGameState(roomId: string, gameState: number[][], currentPlayer: number) {
         try {
+            // 检查数据库是否已初始化
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，无法更新游戏状态');
+                return;
+            }
+
             await this.roomDb.where({
                 roomId: roomId
             }).update({
@@ -364,10 +395,22 @@ export class CloudManager extends Component {
         try {
             console.log('结束游戏:', { roomId, winner });
             
+            // 检查数据库是否已初始化
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，无法结束游戏');
+                return;
+            }
+            
             // 首先获取当前房间的完整状态
             const room = await this.getRoom(roomId);
             if (!room) {
                 console.error('房间不存在，无法结束游戏');
+                return;
+            }
+
+            // 再次检查roomDb是否可用（双重保险）
+            if (!this.roomDb) {
+                console.warn('roomDb为null，无法结束游戏');
                 return;
             }
             
@@ -395,10 +438,22 @@ export class CloudManager extends Component {
         try {
             console.log('重置游戏状态:', { roomId, currentPlayer });
             
+            // 检查数据库是否已初始化
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，无法重置游戏状态');
+                return;
+            }
+            
             // 先获取当前房间数据
             const currentRoom = await this.getRoom(roomId);
             if (!currentRoom) {
-                console.error('房间不存在，无法重置游戏状态');
+                console.warn('房间不存在，无法重置游戏状态');
+                return;
+            }
+
+            // 再次检查数据库是否可用（双重保险）
+            if (!this.roomDb) {
+                console.warn('roomDb为null，无法重置游戏状态');
                 return;
             }
 
@@ -437,6 +492,12 @@ export class CloudManager extends Component {
     // 获取随机房间（匹配功能）
     async getRandomRoom(): Promise<RoomData | null> {
         try {
+            // 检查数据库是否已初始化
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，无法获取随机房间');
+                return null;
+            }
+
             const result = await this.roomDb.where({
                 gameStatus: 'waiting'
             }).limit(1).get();
@@ -454,20 +515,42 @@ export class CloudManager extends Component {
     // 离开房间
     async leaveRoom(roomId: string, playerId: string) {
         try {
+            // 检查数据库是否已初始化
+            if (!this.initialized || !this.roomDb) {
+                console.warn('房间数据库未初始化，无法执行离开房间操作');
+                return;
+            }
+
             const room = await this.getRoom(roomId);
             if (!room || !room._id) return;
+
+            // 再次检查roomDb是否可用（双重保险）
+            if (!this.roomDb) {
+                console.warn('roomDb为null，无法执行房间操作');
+                return;
+            }
 
             if (room.hostId === playerId) {
                 // 房主离开，删除房间
                 await this.roomDb.doc(room._id).remove();
+                console.log('房主离开，房间已删除:', roomId);
             } else if (room.guestId === playerId) {
-                // 客机离开，重置房间状态
+                // 客机离开，重置房间状态为等待玩家加入，并清空棋盘
+                console.log('客机玩家离开房间，重置房间状态为waiting并清空棋盘:', roomId);
+                
+                // 创建空的棋盘状态
+                const emptyBoard = Array(15).fill(null).map(() => Array(15).fill(0));
+                
                 await this.roomDb.doc(room._id).update({
                     data: {
                         guestId: '',
-                        gameStatus: 'waiting'
+                        gameStatus: 'waiting',
+                        winner: null, // 清除获胜者信息
+                        gameState: emptyBoard, // 清空棋盘数据
+                        currentPlayer: 1 // 重置当前玩家为房主（黑子）
                     }
                 });
+                console.log('房间状态已更新为waiting，棋盘已清空，等待新玩家加入');
             }
         } catch (error) {
             console.error('离开房间失败:', error);

@@ -1718,7 +1718,7 @@
     "node": {
       "__id__": 41
     },
-    "_enabled": true,
+    "_enabled": false,
     "__prefab": null,
     "_customMaterial": null,
     "_srcBlendFactor": 2,
@@ -2030,7 +2030,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "b38a076f-a153-458d-88d1-29410c3dec9d@f9941",
+      "__uuid__": "55658379-6a50-4941-adbb-f2f2e6da27bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -2468,7 +2468,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "b38a076f-a153-458d-88d1-29410c3dec9d@f9941",
+      "__uuid__": "55658379-6a50-4941-adbb-f2f2e6da27bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -2906,7 +2906,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "b38a076f-a153-458d-88d1-29410c3dec9d@f9941",
+      "__uuid__": "55658379-6a50-4941-adbb-f2f2e6da27bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -3356,7 +3356,7 @@
     "node": {
       "__id__": 82
     },
-    "_enabled": true,
+    "_enabled": false,
     "__prefab": null,
     "_customMaterial": null,
     "_srcBlendFactor": 2,
@@ -3668,7 +3668,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "b38a076f-a153-458d-88d1-29410c3dec9d@f9941",
+      "__uuid__": "55658379-6a50-4941-adbb-f2f2e6da27bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -4106,7 +4106,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "b38a076f-a153-458d-88d1-29410c3dec9d@f9941",
+      "__uuid__": "55658379-6a50-4941-adbb-f2f2e6da27bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -4544,7 +4544,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "b38a076f-a153-458d-88d1-29410c3dec9d@f9941",
+      "__uuid__": "55658379-6a50-4941-adbb-f2f2e6da27bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "_type": 0,
@@ -5059,7 +5059,7 @@
       "__id__": 113
     },
     "skillAvailableFrame": {
-      "__uuid__": "b38a076f-a153-458d-88d1-29410c3dec9d@f9941",
+      "__uuid__": "55658379-6a50-4941-adbb-f2f2e6da27bb@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
     "skillUsedFrame": {

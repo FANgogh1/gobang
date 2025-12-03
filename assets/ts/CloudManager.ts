@@ -148,6 +148,34 @@ export class CloudManager extends Component {
         }
     }
 
+    // 确保玩家记录存在（如果不存在则创建）
+    private async ensurePlayerExists(playerId: string, nickname: string): Promise<void> {
+        try {
+            // 检查玩家是否已存在
+            const existingPlayer = await this.userDb.where({
+                playerId: playerId
+            }).get();
+
+            if (existingPlayer.data.length === 0) {
+                // 玩家不存在，创建新记录
+                await this.userDb.add({
+                    data: {
+                        playerId: playerId,
+                        nickname: nickname,
+                        score: 0,
+                        createTime: Date.now()
+                    }
+                });
+                console.log('创建新玩家记录:', playerId);
+            } else {
+                console.log('玩家记录已存在，跳过创建:', playerId);
+            }
+        } catch (error) {
+            console.error('检查或创建玩家记录失败:', error);
+            throw error;
+        }
+    }
+
     // 创建房间
     async createRoom(playerId: string, nickname: string): Promise<string> {
         try {
@@ -190,15 +218,8 @@ export class CloudManager extends Component {
                 data: roomData
             });
 
-            // 同时保存玩家信息
-            await this.userDb.add({
-                data: {
-                    playerId: playerId,
-                    nickname: nickname,
-                    score: 0,
-                    createTime: Date.now()
-                }
-            });
+            // 确保玩家记录存在
+            await this.ensurePlayerExists(playerId, nickname);
 
             console.log('房间创建成功:', roomData.roomId);
             return roomData.roomId;
@@ -249,16 +270,9 @@ export class CloudManager extends Component {
                 }
             });
 
-            // 保存客机玩家信息
-            console.log('保存玩家信息...');
-            await this.userDb.add({
-                data: {
-                    playerId: playerId,
-                    nickname: nickname,
-                    score: 0,
-                    createTime: Date.now()
-                }
-            });
+            // 确保玩家记录存在
+            console.log('检查玩家信息...');
+            await this.ensurePlayerExists(playerId, nickname);
 
             console.log('成功加入房间:', roomId);
             return true;
@@ -458,7 +472,7 @@ export class CloudManager extends Component {
             }
 
             // 简化更新数据，只更新必要字段
-            const updateData = {
+            let updateData: any = {
                 gameState: gameState,
                 currentPlayer: currentPlayer,
                 gameStatus: 'playing'
@@ -483,10 +497,10 @@ export class CloudManager extends Component {
 
     // 生成房间ID
     private generateRoomId(): string {
-        // 使用时间戳+随机数确保唯一性
-        const timestamp = Date.now().toString(36).substr(-4);
-        const random = Math.random().toString(36).substr(2, 4).toUpperCase();
-        return (timestamp + random).toUpperCase();
+        // 生成六位数的数字房间ID
+        const roomId = Math.floor(100000 + Math.random() * 900000).toString();
+        console.log('生成新的六位数房间ID:', roomId);
+        return roomId;
     }
 
     // 获取随机房间（匹配功能）

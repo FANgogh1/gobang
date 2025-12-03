@@ -56,6 +56,12 @@ export class online extends Component {
     @property(AudioClip)
     buttonClickAudio: AudioClip = null;
 
+    @property(AudioClip)
+    winAudio: AudioClip = null;
+
+    @property(AudioClip)
+    loseAudio: AudioClip = null;
+
     // 用户信息显示组件
     @property(Sprite)
     player1Avatar: Sprite = null;
@@ -161,6 +167,18 @@ export class online extends Component {
     private playButtonClickSound() {
         if (this.audioSource && this.buttonClickAudio) {
             this.audioSource.playOneShot(this.buttonClickAudio);
+        }
+    }
+
+    private playWinSound() {
+        if (this.audioSource && this.winAudio) {
+            this.audioSource.playOneShot(this.winAudio);
+        }
+    }
+
+    private playLoseSound() {
+        if (this.audioSource && this.loseAudio) {
+            this.audioSource.playOneShot(this.loseAudio);
         }
     }
 
@@ -851,6 +869,13 @@ export class online extends Component {
             const winnerText = room.winner === this.playerRole ? '你赢了！' : '你输了！';
             this.updateStatusText(winnerText);
             
+            // 播放获胜或失败音效
+            if (room.winner === this.playerRole) {
+                this.playWinSound();
+            } else {
+                this.playLoseSound();
+            }
+            
             // 确保最终的棋盘状态被正确显示
             console.log('游戏结束，最终棋盘状态已更新');
         } else if (room.gameStatus === 'playing') {
@@ -1043,12 +1068,15 @@ export class online extends Component {
 
         // 检查获胜
         if (this.checkWin(x, y, this.currentPlayer)) {
+            // 播放获胜音效（当前玩家获胜）
+            this.playWinSound();
             await this.cloudManager.finishGame(this.roomId, this.playerRole);
             return;
         }
 
         // 检查平局
         if (this.checkDraw()) {
+            // 平局不播放特殊音效
             await this.cloudManager.finishGame(this.roomId, 0); // 0表示平局
             return;
         }

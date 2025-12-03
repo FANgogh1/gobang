@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, Prefab, instantiate, Vec3, UITransform, RichText, AudioClip, AudioSource, director, Director, Label, Button } from 'cc';
+import { _decorator, Component, Node, Prefab, instantiate, Vec3, UITransform, RichText, AudioClip, AudioSource, director, Director, Label, Button, Sprite, SpriteFrame, Texture2D, ImageAsset } from 'cc';
 import { CloudManager, RoomData } from './CloudManager';
 
 const { ccclass, property } = _decorator;
@@ -56,6 +56,22 @@ export class online extends Component {
     @property(AudioClip)
     buttonClickAudio: AudioClip = null;
 
+    // 用户信息显示组件
+    @property(Sprite)
+    player1Avatar: Sprite = null;
+
+    @property(Label)
+    player1Nickname: Label = null;
+
+    @property(Sprite)
+    player2Avatar: Sprite = null;
+
+    @property(Label)
+    player2Nickname: Label = null;
+
+    @property(SpriteFrame)
+    defaultAvatar: SpriteFrame = null;
+
     private audioSource: AudioSource = null;
     private cloudManager: CloudManager = null;
 
@@ -79,6 +95,10 @@ export class online extends Component {
     private isResettingGame: boolean = false; // 防止重置过程中重复操作
     private isCreatingRoom: boolean = false; // 防止重复创建房间
     private isInitialized: boolean = false; // 防止重复初始化
+
+    // 用户信息
+    private currentUserInfo: any = null;
+    private opponentUserInfo: any = null;
 
     async start() {
         // 防止重复初始化
@@ -116,6 +136,7 @@ export class online extends Component {
 
         this.initGame();
         this.setupButtons();
+        this.initUserInfo();
         await this.loginAndSetup();
     }
 
@@ -210,6 +231,12 @@ export class online extends Component {
                 if (e.key === 'F1') {
                     e.preventDefault();
                     this.createTestRoom();
+                } else if (e.key === 'F2') {
+                    e.preventDefault();
+                    this.testUserInfoDisplay();
+                } else if (e.key === 'F3') {
+                    e.preventDefault();
+                    this.testUserInfoDatabase();
                 }
             };
             
@@ -237,14 +264,316 @@ export class online extends Component {
         }
     }
 
+    // 测试用户信息显示（用于调试）
+    private testUserInfoDisplay() {
+        console.log('=== 测试用户信息显示 ===');
+        
+        // 测试当前用户信息显示
+        if (this.currentUserInfo) {
+            console.log('当前用户信息:', this.currentUserInfo);
+            this.updatePlayerInfo(1, this.currentUserInfo);
+            this.updatePlayerInfo(2, this.currentUserInfo);
+        }
+        
+        // 测试默认头像设置
+        if (this.player1Avatar) {
+            this.setPlayerDefaultAvatar(this.player1Avatar);
+            console.log('设置玩家1默认头像');
+        }
+        
+        if (this.player2Avatar) {
+            this.setPlayerDefaultAvatar(this.player2Avatar);
+            console.log('设置玩家2默认头像');
+        }
+        
+        // 测试昵称显示
+        if (this.player1Nickname) {
+            this.player1Nickname.string = '测试玩家1';
+        }
+        
+        if (this.player2Nickname) {
+            this.player2Nickname.string = '测试玩家2';
+        }
+        
+        console.log('=== 测试完成 ===');
+    }
+
+    // 测试用户信息数据库保存（用于调试）
+    private async testUserInfoDatabase() {
+        console.log('=== 测试用户信息数据库保存 ===');
+        
+        if (!this.cloudManager || !this.playerId || !this.currentUserInfo) {
+            console.log('缺少必要信息，跳过测试');
+            return;
+        }
+        
+        try {
+            // 测试保存用户信息
+            await this.cloudManager.ensurePlayerExists(
+                this.playerId, 
+                this.currentUserInfo.nickName || 'TestPlayer', 
+                this.currentUserInfo
+            );
+            console.log('用户信息保存测试成功');
+            
+            // 测试获取用户信息
+            const savedInfo = await this.cloudManager.getPlayerInfo(this.playerId);
+            console.log('从数据库获取的用户信息:', savedInfo);
+            
+            // 测试更新显示
+            if (savedInfo) {
+                this.opponentUserInfo = {
+                    nickName: savedInfo.nickName || savedInfo.nickname,
+                    avatarUrl: savedInfo.avatarUrl
+                };
+                this.updatePlayerInfo(2, this.opponentUserInfo);
+            }
+            
+            console.log('=== 数据库测试完成 ===');
+        } catch (error) {
+            console.error('用户信息数据库测试失败:', error);
+        }
+    }
+
     // 登录并设置
     private async loginAndSetup() {
         try {
             this.playerId = await this.cloudManager.login();
             this.updateStatusText('登录成功，请选择创建房间或加入游戏');
+            
+            // 登录成功后，保存用户信息到数据库
+            await this.saveUserInfoToDatabase();
         } catch (error) {
             this.updateStatusText('登录失败');
             console.error('登录失败:', error);
+        }
+    }
+
+    // 初始化用户信息
+    private initUserInfo() {
+        // 从本地存储获取用户信息（与profile.ts保持一致）
+        try {
+            let userInfoStr = '';
+            if (typeof window !== 'undefined' && window.wx && window.wx.getStorageSync) {
+                // 微信小程序环境
+                userInfoStr = window.wx.getStorageSync('userInfo') || '';
+            } else {
+                // 开发环境或其他环境，使用localStorage
+                userInfoStr = localStorage.getItem('userInfo') || '';
+            }
+            
+            if (userInfoStr) {
+                this.currentUserInfo = JSON.parse(userInfoStr);
+                console.log('获取到用户信息:', this.currentUserInfo);
+                
+                // 显示当前用户信息（作为玩家1）
+                this.updatePlayerInfo(1, this.currentUserInfo);
+                
+                // 将用户信息保存到数据库（如果还没有保存的话）
+                this.saveUserInfoToDatabase();
+            } else {
+                console.log('未找到用户信息，使用默认信息');
+                // 使用默认用户信息
+                this.currentUserInfo = {
+                    nickName: '示例账号',
+                    avatarUrl: ''
+                };
+                this.updatePlayerInfo(1, this.currentUserInfo);
+            }
+        } catch (error) {
+            console.error('读取用户信息失败:', error);
+            // 使用默认用户信息
+            this.currentUserInfo = {
+                nickName: '示例账号',
+                avatarUrl: ''
+            };
+            this.updatePlayerInfo(1, this.currentUserInfo);
+        }
+    }
+
+    // 保存用户信息到数据库
+    private async saveUserInfoToDatabase() {
+        if (!this.currentUserInfo || !this.cloudManager || !this.playerId) {
+            return;
+        }
+        
+        try {
+            // 使用CloudManager的ensurePlayerExists方法来保存用户信息
+            await (this.cloudManager as any).ensurePlayerExists(
+                this.playerId, 
+                this.currentUserInfo.nickName || 'Player', 
+                this.currentUserInfo
+            );
+            console.log('用户信息已保存到数据库:', this.currentUserInfo);
+        } catch (error) {
+            console.error('保存用户信息到数据库失败:', error);
+        }
+    }
+
+    // 更新玩家信息显示
+    private updatePlayerInfo(playerNumber: number, userInfo: any) {
+        if (playerNumber === 1) {
+            // 玩家1（房主）
+            if (this.player1Nickname && userInfo.nickName) {
+                this.player1Nickname.string = userInfo.nickName;
+            }
+            if (this.player1Avatar) {
+                if (userInfo.avatarUrl && userInfo.avatarUrl !== '' && !userInfo.isSimulated) {
+                    this.loadPlayerAvatar(this.player1Avatar, userInfo.avatarUrl);
+                } else {
+                    this.setPlayerDefaultAvatar(this.player1Avatar);
+                }
+            }
+        } else if (playerNumber === 2) {
+            // 玩家2（客机）
+            if (this.player2Nickname && userInfo.nickName) {
+                this.player2Nickname.string = userInfo.nickName;
+            }
+            if (this.player2Avatar) {
+                if (userInfo.avatarUrl && userInfo.avatarUrl !== '' && !userInfo.isSimulated) {
+                    this.loadPlayerAvatar(this.player2Avatar, userInfo.avatarUrl);
+                } else {
+                    this.setPlayerDefaultAvatar(this.player2Avatar);
+                }
+            }
+        }
+    }
+
+    // 加载玩家头像
+    private loadPlayerAvatar(avatarSprite: Sprite, avatarUrl: string) {
+        if (!avatarSprite) {
+            return;
+        }
+
+        // 使用微信图片加载API
+        if (typeof window !== 'undefined' && window.wx) {
+            // 方法1：尝试使用wx.createImage加载
+            if (window.wx.createImage) {
+                const image = window.wx.createImage();
+                image.onload = () => {
+                    try {
+                        // 创建ImageAsset
+                        const imageAsset = new ImageAsset(image);
+                        console.log('使用wx.createImage加载成功');
+                        
+                        // 创建Texture2D
+                        const texture = new Texture2D();
+                        texture.image = imageAsset;
+                        
+                        // 创建SpriteFrame
+                        const spriteFrame = new SpriteFrame();
+                        spriteFrame.texture = texture;
+                        
+                        // 设置到Sprite组件
+                        avatarSprite.spriteFrame = spriteFrame;
+                        console.log('玩家头像设置成功');
+                    } catch (error) {
+                        console.error('使用wx.createImage创建SpriteFrame失败:', error);
+                        this.setPlayerDefaultAvatar(avatarSprite);
+                    }
+                };
+                
+                image.onerror = () => {
+                    console.error('wx.createImage加载失败');
+                    this.setPlayerDefaultAvatar(avatarSprite);
+                };
+                
+                image.src = avatarUrl;
+            } else {
+                // 如果没有wx.createImage，使用原来的downloadFile方法
+                this.tryDownloadPlayerAvatar(avatarSprite, avatarUrl);
+            }
+        } else {
+            // 非微信环境，使用默认头像
+            this.setPlayerDefaultAvatar(avatarSprite);
+        }
+    }
+    
+    // 备用的下载文件方法
+    private tryDownloadPlayerAvatar(avatarSprite: Sprite, avatarUrl: string) {
+        if (!avatarSprite || !window.wx) {
+            this.setPlayerDefaultAvatar(avatarSprite);
+            return;
+        }
+        
+        window.wx.downloadFile({
+            url: avatarUrl,
+            success: (downloadRes: any) => {
+                // 将下载的临时文件转换为图片
+                window.wx.getFileSystemManager().readFile({
+                    filePath: downloadRes.tempFilePath,
+                    success: (fileRes: any) => {
+                        // 创建图片数据
+                        const imageData = fileRes.data;
+                        console.log('玩家头像数据类型:', typeof imageData);
+                        console.log('玩家头像数据长度:', imageData ? imageData.length : 'undefined');
+                        
+                        try {
+                            // 创建ImageAsset
+                            const imageAsset = new ImageAsset(imageData);
+                            console.log('玩家头像ImageAsset创建成功');
+                            
+                            // 创建Texture2D
+                            const texture = new Texture2D();
+                            texture.image = imageAsset;
+                            console.log('玩家头像Texture2D创建成功');
+                            
+                            // 创建SpriteFrame
+                            const spriteFrame = new SpriteFrame();
+                            spriteFrame.texture = texture;
+                            console.log('玩家头像SpriteFrame创建成功');
+                            
+                            // 设置到Sprite组件
+                            avatarSprite.spriteFrame = spriteFrame;
+                            console.log('玩家头像设置成功:', downloadRes.tempFilePath);
+                        } catch (error) {
+                            console.error('创建玩家头像SpriteFrame失败:', error);
+                            this.setPlayerDefaultAvatar(avatarSprite);
+                        }
+                    },
+                    fail: (fileErr: any) => {
+                        console.error('读取玩家头像文件失败:', fileErr);
+                        this.setPlayerDefaultAvatar(avatarSprite);
+                    }
+                });
+            },
+            fail: (downloadErr: any) => {
+                console.error('下载玩家头像失败:', downloadErr);
+                this.setPlayerDefaultAvatar(avatarSprite);
+            }
+        });
+    }
+
+    // 设置默认头像
+    private setPlayerDefaultAvatar(avatarSprite: Sprite) {
+        if (avatarSprite && this.defaultAvatar) {
+            avatarSprite.spriteFrame = this.defaultAvatar;
+            console.log('使用默认头像');
+        } else {
+            console.warn('默认头像资源未设置或avatarSprite为空');
+        }
+    }
+
+    // 清空玩家显示
+    private clearPlayerDisplay(playerNumber: number) {
+        if (playerNumber === 1) {
+            // 清空玩家1显示
+            if (this.player1Nickname) {
+                this.player1Nickname.string = '等待玩家...';
+            }
+            if (this.player1Avatar && this.defaultAvatar) {
+                this.player1Avatar.spriteFrame = this.defaultAvatar;
+            }
+            console.log('已清空玩家1显示');
+        } else if (playerNumber === 2) {
+            // 清空玩家2显示
+            if (this.player2Nickname) {
+                this.player2Nickname.string = '等待玩家...';
+            }
+            if (this.player2Avatar && this.defaultAvatar) {
+                this.player2Avatar.spriteFrame = this.defaultAvatar;
+            }
+            console.log('已清空玩家2显示');
         }
     }
 
@@ -277,7 +606,7 @@ export class online extends Component {
                 this.createRoomBtn.interactable = false;
             }
             
-            this.roomId = await this.cloudManager.createRoom(this.playerId, 'Player');
+            this.roomId = await this.cloudManager.createRoom(this.playerId, this.currentUserInfo?.nickName || 'Player');
             
             console.log('房间创建成功:', this.roomId);
             
@@ -322,7 +651,7 @@ export class online extends Component {
             this.playButtonClickSound();
             this.updateStatusText('正在加入房间...');
             
-            const success = await this.cloudManager.joinRoom(roomId, this.playerId, 'Player');
+            const success = await this.cloudManager.joinRoom(roomId, this.playerId, this.currentUserInfo?.nickName || 'Player');
             
             if (success) {
                 this.roomId = roomId;
@@ -406,7 +735,7 @@ export class online extends Component {
             if (room) {
                 // 找到房间，加入
                 console.log('找到可用房间，准备加入:', room.roomId);
-                const success = await this.cloudManager.joinRoom(room.roomId, this.playerId, 'Player');
+                const success = await this.cloudManager.joinRoom(room.roomId, this.playerId, this.currentUserInfo?.nickName || 'Player');
                 if (success) {
                     this.roomId = room.roomId;
                     this.playerRole = 2;
@@ -430,7 +759,7 @@ export class online extends Component {
                 }
             } else {
                 // 没找到房间，创建新房间
-                this.roomId = await this.cloudManager.createRoom(this.playerId, 'Player');
+                this.roomId = await this.cloudManager.createRoom(this.playerId, this.currentUserInfo?.nickName || 'Player');
                 this.playerRole = 1;
                 this.isMyTurn = true;
                 
@@ -487,7 +816,7 @@ export class online extends Component {
     private roomRefreshTimer: NodeJS.Timeout | null = null;
 
     // 房间状态更新
-    private onRoomUpdate(room: RoomData | null | undefined) {
+    private async onRoomUpdate(room: RoomData | null | undefined) {
         console.log('房间状态更新:', room);
         
         // 检查房间数据是否有效
@@ -501,6 +830,9 @@ export class online extends Component {
             console.warn('房间数据无效，gameState不是数组:', room);
             return;
         }
+        
+        // 更新玩家信息显示
+        await this.updatePlayerDisplay(room);
         
         // 更新棋盘状态（始终更新，包括游戏结束时）
         this.board = room.gameState;
@@ -526,6 +858,78 @@ export class online extends Component {
             this.updateStatusText(this.isMyTurn ? `轮到你了（${myColor}）` : `等待对手落子`);
         } else if (room.gameStatus === 'waiting') {
             this.updateStatusText('等待对手加入...');
+        }
+    }
+
+    // 更新玩家显示信息
+    private async updatePlayerDisplay(room: RoomData) {
+        // 根据玩家角色确定显示位置
+        if (this.playerRole === 1) {
+            // 我是房主，显示在左侧
+            this.updatePlayerInfo(1, this.currentUserInfo);
+            
+            // 显示对手信息（如果有）
+            if (room.guestId && room.guestId !== '') {
+                // 优先使用房间中的头像信息
+                if (room.guestAvatarUrl) {
+                    this.opponentUserInfo = {
+                        nickName: room.guestNickname || '未知玩家',
+                        avatarUrl: room.guestAvatarUrl
+                    };
+                } else {
+                    // 从数据库获取对手的完整信息
+                    const opponentInfo = await this.cloudManager.getPlayerInfo(room.guestId);
+                    if (opponentInfo) {
+                        this.opponentUserInfo = {
+                            nickName: opponentInfo.nickName || opponentInfo.nickname || room.guestNickname,
+                            avatarUrl: opponentInfo.avatarUrl || ''
+                        };
+                    } else {
+                        // 如果数据库中没有，使用房间中的基本信息
+                        this.opponentUserInfo = {
+                            nickName: room.guestNickname || '未知玩家',
+                            avatarUrl: ''
+                        };
+                    }
+                }
+                this.updatePlayerInfo(2, this.opponentUserInfo);
+            } else {
+                // 客机离开，清空客机显示
+                this.clearPlayerDisplay(2);
+            }
+        } else if (this.playerRole === 2) {
+            // 我是客机，显示在右侧
+            this.updatePlayerInfo(2, this.currentUserInfo);
+            
+            // 显示房主信息
+            if (room.hostId && room.hostId !== '') {
+                // 优先使用房间中的头像信息
+                if (room.hostAvatarUrl) {
+                    this.opponentUserInfo = {
+                        nickName: room.hostNickname || '未知玩家',
+                        avatarUrl: room.hostAvatarUrl
+                    };
+                } else {
+                    // 从数据库获取房主的完整信息
+                    const opponentInfo = await this.cloudManager.getPlayerInfo(room.hostId);
+                    if (opponentInfo) {
+                        this.opponentUserInfo = {
+                            nickName: opponentInfo.nickName || opponentInfo.nickname || room.hostNickname,
+                            avatarUrl: opponentInfo.avatarUrl || ''
+                        };
+                    } else {
+                        // 如果数据库中没有，使用房间中的基本信息
+                        this.opponentUserInfo = {
+                            nickName: room.hostNickname || '未知玩家',
+                            avatarUrl: ''
+                        };
+                    }
+                }
+                this.updatePlayerInfo(1, this.opponentUserInfo);
+            } else {
+                // 房主离开，清空房主显示
+                this.clearPlayerDisplay(1);
+            }
         }
     }
 

@@ -3597,6 +3597,22 @@
       "__uuid__": "414adfcb-90be-4d93-9f5c-bf3025f9d7b6",
       "__expectedType__": "cc.AudioClip"
     },
+    "player1Avatar": {
+      "__id__": 80
+    },
+    "player1Nickname": {
+      "__id__": 78
+    },
+    "player2Avatar": {
+      "__id__": 86
+    },
+    "player2Nickname": {
+      "__id__": 84
+    },
+    "defaultAvatar": {
+      "__uuid__": "52828380-8950-41f8-8134-046ebb0f20d2@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
     "_id": "94fXH+WQJPVLI3Y+wPBvSG"
   },
   {

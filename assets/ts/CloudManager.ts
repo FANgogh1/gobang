@@ -12,7 +12,11 @@ export interface RoomData {
     _id?: string; // 云数据库自动生成的ID
     roomId: string;
     hostId: string;
+    hostNickname?: string;
+    hostAvatarUrl?: string;
     guestId?: string;
+    guestNickname?: string;
+    guestAvatarUrl?: string;
     gameState: number[][];
     currentPlayer: number;
     gameStatus: 'waiting' | 'playing' | 'finished';
@@ -23,7 +27,9 @@ export interface RoomData {
 export interface PlayerData {
     playerId: string;
     nickname: string;
-    avatar: string;
+    avatarUrl: string;
+    nickName: string; // 微信用户昵称字段
+    avatar: string; // 兼容旧字段
     score: number;
 }
 
@@ -149,7 +155,7 @@ export class CloudManager extends Component {
     }
 
     // 确保玩家记录存在（如果不存在则创建）
-    private async ensurePlayerExists(playerId: string, nickname: string): Promise<void> {
+    async ensurePlayerExists(playerId: string, nickname: string, userInfo?: any): Promise<void> {
         try {
             // 检查玩家是否已存在
             const existingPlayer = await this.userDb.where({
@@ -158,21 +164,80 @@ export class CloudManager extends Component {
 
             if (existingPlayer.data.length === 0) {
                 // 玩家不存在，创建新记录
+                const playerData: any = {
+                    playerId: playerId,
+                    nickname: nickname,
+                    nickName: userInfo?.nickName || nickname,
+                    avatarUrl: userInfo?.avatarUrl || '',
+                    avatar: userInfo?.avatarUrl || '',
+                    score: 0,
+                    createTime: Date.now()
+                };
+                
                 await this.userDb.add({
-                    data: {
-                        playerId: playerId,
-                        nickname: nickname,
-                        score: 0,
-                        createTime: Date.now()
-                    }
+                    data: playerData
                 });
-                console.log('创建新玩家记录:', playerId);
+                console.log('创建新玩家记录:', playerId, playerData);
             } else {
                 console.log('玩家记录已存在，跳过创建:', playerId);
+                
+                // 如果提供了新的用户信息，更新现有记录
+                if (userInfo && (userInfo.nickName || userInfo.avatarUrl)) {
+                    await this.updatePlayerInfo(playerId, userInfo);
+                }
             }
         } catch (error) {
             console.error('检查或创建玩家记录失败:', error);
             throw error;
+        }
+    }
+
+    // 更新玩家信息
+    private async updatePlayerInfo(playerId: string, userInfo: any): Promise<void> {
+        try {
+            const updateData: any = {};
+            
+            if (userInfo.nickName) {
+                updateData.nickName = userInfo.nickName;
+                updateData.nickname = userInfo.nickName;
+            }
+            
+            if (userInfo.avatarUrl) {
+                updateData.avatarUrl = userInfo.avatarUrl;
+                updateData.avatar = userInfo.avatarUrl;
+            }
+            
+            updateData.updateTime = Date.now();
+            
+            await this.userDb.where({
+                playerId: playerId
+            }).update({
+                data: updateData
+            });
+            
+            console.log('玩家信息已更新:', playerId, updateData);
+        } catch (error) {
+            console.error('更新玩家信息失败:', error);
+        }
+    }
+
+    // 获取玩家信息
+    async getPlayerInfo(playerId: string): Promise<PlayerData | null> {
+        try {
+            const result = await this.userDb.where({
+                playerId: playerId
+            }).get();
+            
+            if (result.data.length > 0) {
+                console.log('获取到玩家信息:', result.data[0]);
+                return result.data[0] as PlayerData;
+            }
+            
+            console.log('未找到玩家信息:', playerId);
+            return null;
+        } catch (error) {
+            console.error('获取玩家信息失败:', error);
+            return null;
         }
     }
 
@@ -196,9 +261,14 @@ export class CloudManager extends Component {
                 return existingRoom.data[0].roomId;
             }
 
+            // 获取房主用户的完整信息
+            const hostUserInfo = await this.getPlayerInfo(playerId);
+            
             const roomData: RoomData = {
                 roomId: this.generateRoomId(),
                 hostId: playerId,
+                hostNickname: nickname,
+                hostAvatarUrl: hostUserInfo?.avatarUrl || '',
                 gameState: Array(15).fill(null).map(() => Array(15).fill(0)),
                 currentPlayer: 1, // 1表示房主先手
                 gameStatus: 'waiting',
@@ -218,8 +288,8 @@ export class CloudManager extends Component {
                 data: roomData
             });
 
-            // 确保玩家记录存在
-            await this.ensurePlayerExists(playerId, nickname);
+            // 确保玩家记录存在，并传递完整的用户信息
+            await this.ensurePlayerExists(playerId, nickname, { nickName: nickname });
 
             console.log('房间创建成功:', roomData.roomId);
             return roomData.roomId;
@@ -263,16 +333,28 @@ export class CloudManager extends Component {
 
             // 更新房间信息，添加客机玩家
             console.log('更新房间信息...');
+            
+            // 获取客机用户的完整信息
+            const guestUserInfo = await this.getPlayerInfo(playerId);
+            
+            const updateData: any = {
+                guestId: playerId,
+                guestNickname: nickname,
+                gameStatus: 'playing'
+            };
+            
+            // 如果有头像信息，也保存到房间数据中
+            if (guestUserInfo && guestUserInfo.avatarUrl) {
+                updateData.guestAvatarUrl = guestUserInfo.avatarUrl;
+            }
+            
             await this.roomDb.doc(room._id).update({
-                data: {
-                    guestId: playerId,
-                    gameStatus: 'playing'
-                }
+                data: updateData
             });
 
-            // 确保玩家记录存在
+            // 确保玩家记录存在，并传递完整的用户信息
             console.log('检查玩家信息...');
-            await this.ensurePlayerExists(playerId, nickname);
+            await this.ensurePlayerExists(playerId, nickname, { nickName: nickname });
 
             console.log('成功加入房间:', roomId);
             return true;
@@ -549,7 +631,7 @@ export class CloudManager extends Component {
                 await this.roomDb.doc(room._id).remove();
                 console.log('房主离开，房间已删除:', roomId);
             } else if (room.guestId === playerId) {
-                // 客机离开，重置房间状态为等待玩家加入，并清空棋盘
+                // 客机离开，重置房间状态为等待玩家加入，并清空棋盘和客机信息
                 console.log('客机玩家离开房间，重置房间状态为waiting并清空棋盘:', roomId);
                 
                 // 创建空的棋盘状态
@@ -558,13 +640,15 @@ export class CloudManager extends Component {
                 await this.roomDb.doc(room._id).update({
                     data: {
                         guestId: '',
+                        guestNickname: '',
+                        guestAvatarUrl: '',
                         gameStatus: 'waiting',
                         winner: null, // 清除获胜者信息
                         gameState: emptyBoard, // 清空棋盘数据
                         currentPlayer: 1 // 重置当前玩家为房主（黑子）
                     }
                 });
-                console.log('房间状态已更新为waiting，棋盘已清空，等待新玩家加入');
+                console.log('房间状态已更新为waiting，客机信息已清空，棋盘已清空，等待新玩家加入');
             }
         } catch (error) {
             console.error('离开房间失败:', error);

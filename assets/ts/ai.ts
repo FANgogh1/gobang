@@ -54,6 +54,10 @@ export class ai extends Component {
     private currentPlayer: PieceType = PieceType.BLACK;
     private gameState: GameState = GameState.PLAYING;
     private pieces: Node[][] = [];
+    
+    // 悔棋功能：历史记录
+    private moveHistory: Array<{ x: number, y: number, pieceType: PieceType }> = [];
+    private lastAIMove: { x: number, y: number } | null = null;
 
     start() {
         // 初始化音频源
@@ -118,6 +122,11 @@ export class ai extends Component {
 
         this.currentPlayer = PieceType.BLACK;
         this.gameState = GameState.PLAYING;
+        
+        // 清空历史记录
+        this.moveHistory = [];
+        this.lastAIMove = null;
+        
         this.updateStatusText('开始游戏');
     }
 
@@ -180,6 +189,9 @@ export class ai extends Component {
         // 更新棋盘数据
         this.board[y][x] = pieceType;
 
+        // 记录历史
+        this.moveHistory.push({ x, y, pieceType });
+
         // 创建棋子节点
         const prefab = pieceType === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
         if (prefab) {
@@ -205,6 +217,7 @@ export class ai extends Component {
         const move = this.getBestMove();
         if (move) {
             this.placePiece(move.x, move.y, PieceType.WHITE);
+            this.lastAIMove = move;
             
             // 检查AI是否获胜
             if (this.checkWin(move.x, move.y, PieceType.WHITE)) {
@@ -404,6 +417,62 @@ export class ai extends Component {
         if (this.statusText) {
             this.statusText.string = text;
         }
+    }
+
+    // 悔棋按钮点击事件
+    onUndoMove() {
+        // 播放按钮音效
+        this.playButtonClickSound();
+        
+        // 检查是否可以悔棋（至少需要一步AI落子和一步玩家落子）
+        if (this.moveHistory.length < 2) {
+            this.updateStatusText('无法悔棋，步数不足！');
+            return;
+        }
+        
+        // 检查当前游戏状态
+        if (this.gameState !== GameState.PLAYING) {
+            this.updateStatusText('游戏已结束，无法悔棋！');
+            return;
+        }
+        
+        // 撤销AI的最近一步落子
+        if (this.lastAIMove) {
+            this.removePiece(this.lastAIMove.x, this.lastAIMove.y);
+            this.moveHistory.pop(); // 移除AI落子记录
+        }
+        
+        // 撤销玩家的最近一步落子
+        if (this.moveHistory.length > 0) {
+            const lastPlayerMove = this.moveHistory[this.moveHistory.length - 1];
+            if (lastPlayerMove.pieceType === PieceType.BLACK) {
+                this.removePiece(lastPlayerMove.x, lastPlayerMove.y);
+                this.moveHistory.pop(); // 移除玩家落子记录
+            }
+        }
+        
+        // 重置相关状态
+        this.lastAIMove = null;
+        this.currentPlayer = PieceType.BLACK;
+        this.updateStatusText('玩家回合');
+    }
+
+    // 移除棋子
+    private removePiece(x: number, y: number): boolean {
+        if (!this.isValidPosition(x, y) || this.board[y][x] === PieceType.EMPTY) {
+            return false;
+        }
+
+        // 更新棋盘数据
+        this.board[y][x] = PieceType.EMPTY;
+
+        // 销毁棋子节点
+        if (this.pieces[y][x] && this.pieces[y][x].isValid) {
+            this.pieces[y][x].destroy();
+            this.pieces[y][x] = null;
+        }
+
+        return true;
     }
 
     // 重新开始游戏

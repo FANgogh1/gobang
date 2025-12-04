@@ -172,6 +172,13 @@ export class home extends Component {
     onOnlineBattleButtonClick() {
         console.log('在线对战按钮被点击');
         this.playButtonClickSound();
+        
+        // 检查用户是否登录
+        if (!this.isUserLoggedIn()) {
+            this.showLoginRequiredDialog();
+            return;
+        }
+        
         this.loadScene('online');
     }
 
@@ -194,6 +201,51 @@ export class home extends Component {
             this.playBackgroundMusic();
         } else {
             this.stopBackgroundMusic();
+        }
+    }
+
+    // 检查用户是否已登录
+    private isUserLoggedIn(): boolean {
+        try {
+            let userInfoStr = '';
+            if (typeof wx !== 'undefined' && wx.getStorageSync) {
+                // 微信小程序环境
+                userInfoStr = wx.getStorageSync('userInfo') || '';
+            } else {
+                // 开发环境或其他环境，使用localStorage
+                userInfoStr = localStorage.getItem('userInfo') || '';
+            }
+            
+            return userInfoStr !== '';
+        } catch (error) {
+            console.error('检查登录状态失败:', error);
+            return false;
+        }
+    }
+
+    // 显示需要登录的提示对话框
+    private showLoginRequiredDialog() {
+        if (typeof wx !== 'undefined' && wx.showModal) {
+            // 微信小程序环境
+            wx.showModal({
+                title: '提示',
+                content: '您还未登录，无法进入联机对战模式。\n请先到个人中心进行登录。',
+                showCancel: true,
+                cancelText: '返回',
+                confirmText: '去登录',
+                success: (res) => {
+                    if (res.confirm) {
+                        // 用户选择去登录，跳转到个人中心
+                        this.loadScene('profile');
+                    }
+                }
+            });
+        } else {
+            // 开发环境，使用原生confirm
+            const result = confirm('您还未登录，无法进入联机对战模式。\n是否前往个人中心进行登录？');
+            if (result) {
+                this.loadScene('profile');
+            }
         }
     }
 

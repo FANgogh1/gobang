@@ -48,6 +48,9 @@ export class game extends Component {
     private currentPlayer: PieceType = PieceType.BLACK;
     private gameState: GameState = GameState.PLAYING;
     private pieces: Node[][] = [];
+    
+    // 悔棋功能：历史记录
+    private moveHistory: Array<{ x: number, y: number, pieceType: PieceType }> = [];
 
     start() {
         // 初始化音频源
@@ -98,6 +101,10 @@ export class game extends Component {
 
         this.currentPlayer = PieceType.BLACK;
         this.gameState = GameState.PLAYING;
+        
+        // 清空历史记录
+        this.moveHistory = [];
+        
         this.updateStatusText('开始游戏');
     }
 
@@ -160,6 +167,9 @@ export class game extends Component {
 
         // 更新棋盘数据
         this.board[y][x] = pieceType;
+
+        // 记录历史
+        this.moveHistory.push({ x, y, pieceType });
 
         // 创建棋子节点
         const prefab = pieceType === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
@@ -241,6 +251,55 @@ export class game extends Component {
         if (this.statusText) {
             this.statusText.string = text;
         }
+    }
+
+    // 悔棋按钮点击事件
+    onUndoMove() {
+        // 播放按钮音效
+        this.playButtonClickSound();
+        
+        // 检查是否有历史记录
+        if (this.moveHistory.length === 0) {
+            this.updateStatusText('没有可悔棋的步骤！');
+            return;
+        }
+        
+        // 检查当前游戏状态
+        if (this.gameState !== GameState.PLAYING) {
+            this.updateStatusText('游戏已结束，无法悔棋！');
+            return;
+        }
+        
+        // 获取最后一步落子
+        const lastMove = this.moveHistory[this.moveHistory.length - 1];
+        
+        // 撤销最后一步
+        this.removePiece(lastMove.x, lastMove.y);
+        this.moveHistory.pop();
+        
+        // 切换回上一个玩家
+        this.currentPlayer = lastMove.pieceType;
+        const playerName = this.currentPlayer === PieceType.BLACK ? '黑子' : '白子';
+        const pieceName = this.currentPlayer === PieceType.BLACK ? '（玩家1）' : '（玩家2）';
+        this.updateStatusText(`${playerName}回合${pieceName}`);
+    }
+
+    // 移除棋子
+    private removePiece(x: number, y: number): boolean {
+        if (!this.isValidPosition(x, y) || this.board[y][x] === PieceType.EMPTY) {
+            return false;
+        }
+
+        // 更新棋盘数据
+        this.board[y][x] = PieceType.EMPTY;
+
+        // 销毁棋子节点
+        if (this.pieces[y][x] && this.pieces[y][x].isValid) {
+            this.pieces[y][x].destroy();
+            this.pieces[y][x] = null;
+        }
+
+        return true;
     }
 
     // 重新开始游戏

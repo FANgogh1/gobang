@@ -1,4 +1,5 @@
 import { _decorator, Component, director, Node, Prefab, instantiate, Vec3, UITransform, Color, Label, RichText, AudioClip, AudioSource } from 'cc';
+import { CloudManager } from './CloudManager';
 const { ccclass, property } = _decorator;
 
 // 棋子类型枚举
@@ -43,6 +44,10 @@ export class ai extends Component {
     defeatAudio: AudioClip = null;
 
     private audioSource: AudioSource = null;
+    
+    // 微信云开发
+    private cloudManager: CloudManager = null;
+    private db: any = null;
 
     // 棋盘配置
     private BOARD_SIZE = 15;  // 15x15棋盘
@@ -62,6 +67,9 @@ export class ai extends Component {
     start() {
         // 初始化音频源
         this.initAudioSource();
+        
+        // 初始化云开发管理器
+        this.initCloudManager();
         
         this.initGame();
         this.setupBoardClick();
@@ -103,6 +111,146 @@ export class ai extends Component {
     private playDefeatSound() {
         if (this.audioSource && this.defeatAudio) {
             this.audioSource.playOneShot(this.defeatAudio);
+        }
+    }
+
+    // 初始化云开发管理器
+    private initCloudManager() {
+        try {
+            // 创建CloudManager实例并初始化
+            this.cloudManager = new CloudManager();
+            
+            // 等待初始化完成
+            this.cloudManager.start().then(() => {
+                if (this.cloudManager.isInitialized()) {
+                    this.db = this.cloudManager['db'];
+                    console.log('CloudManager初始化成功');
+                } else {
+                    console.warn('CloudManager初始化失败，云开发功能将不可用');
+                }
+            }).catch((error) => {
+                console.error('CloudManager初始化失败:', error);
+                this.cloudManager = null;
+            });
+        } catch (error) {
+            console.error('CloudManager创建失败:', error);
+            this.cloudManager = null;
+        }
+    }
+
+    // 上传对局记录（通用方法，适用于所有游戏结果）
+    private async uploadGameRecord(result: 'win' | 'lose' | 'draw') {
+        if (!this.cloudManager || !this.cloudManager.isInitialized() || !this.db) {
+            console.log('CloudManager未初始化，跳过记录上传');
+            return;
+        }
+
+        try {
+            // 获取用户信息
+            const userInfo = await this.getUserInfo();
+            
+            // 创建记录数据
+            const record = {
+                openid: userInfo.openid || 'anonymous',
+                nickname: userInfo.nickname || '匿名用户',
+                avatarUrl: userInfo.avatarUrl || '',
+                winCount: result === 'win' ? 1 : 0,    // 获胜次数
+                loseCount: result === 'lose' ? 1 : 0,  // 失败次数
+                drawCount: result === 'draw' ? 1 : 0,  // 平局次数
+                totalGames: 1,                         // 总对局次数
+                lastGameResult: result,                 // 最近游戏结果
+                lastGameTime: new Date(),               // 最近游戏时间
+                createTime: new Date(),
+                lastUpdateTime: new Date()
+            };
+
+            console.log('准备上传记录数据:', record);
+
+            // 查询该用户是否已有记录
+            const queryResult = await this.db.collection('ai_battle_records')
+                .where({
+                    openid: record.openid
+                })
+                .get();
+
+            console.log('查询结果:', queryResult);
+
+            if (queryResult.data && queryResult.data.length > 0) {
+                // 更新现有记录
+                const existingRecord = queryResult.data[0];
+                const updateData: any = {
+                    totalGames: (existingRecord.totalGames || 0) + 1,
+                    lastGameResult: result,
+                    lastGameTime: new Date(),
+                    lastUpdateTime: new Date()
+                };
+
+                // 根据结果更新对应的计数
+                if (result === 'win') {
+                    updateData.winCount = (existingRecord.winCount || 0) + 1;
+                } else if (result === 'lose') {
+                    updateData.loseCount = (existingRecord.loseCount || 0) + 1;
+                } else if (result === 'draw') {
+                    updateData.drawCount = (existingRecord.drawCount || 0) + 1;
+                }
+
+                console.log('更新数据:', updateData);
+
+                await this.db.collection('ai_battle_records')
+                    .doc(existingRecord._id)
+                    .update({
+                        data: updateData
+                    });
+                
+                console.log(`更新对局记录成功，结果: ${result}`);
+            } else {
+                // 创建新记录
+                console.log('创建新记录:', record);
+                await this.db.collection('ai_battle_records')
+                    .add({
+                        data: record
+                    });
+                console.log(`创建对局记录成功，结果: ${result}`);
+            }
+
+            // 根据结果显示不同的提示信息
+            const messageMap = {
+                'win': '获胜记录已保存！',
+                'lose': '对局记录已保存！',
+                'draw': '平局记录已保存！'
+            };
+            this.updateStatusText(messageMap[result]);
+            
+        } catch (error) {
+            console.error('上传对局记录失败:', error);
+            this.updateStatusText('记录保存失败，但仍可继续游戏');
+        }
+    }
+
+    // 上传获胜记录（保留原方法以便兼容，现在调用通用方法）
+    private async uploadWinRecord() {
+        await this.uploadGameRecord('win');
+    }
+
+    // 获取用户信息
+    private async getUserInfo(): Promise<{ openid: string, nickname: string, avatarUrl: string }> {
+        try {
+            // 使用CloudManager的登录方法
+            const openid = await this.cloudManager.login();
+            const playerInfo = await this.cloudManager.getPlayerInfo(openid);
+            
+            return {
+                openid: openid,
+                nickname: playerInfo?.nickname || playerInfo?.nickName || '匿名用户',
+                avatarUrl: playerInfo?.avatarUrl || playerInfo?.avatar || ''
+            };
+        } catch (error) {
+            console.log('获取用户信息失败，使用默认值:', error);
+            return {
+                openid: 'anonymous_' + Date.now(),
+                nickname: '匿名用户',
+                avatarUrl: ''
+            };
         }
     }
 
@@ -159,6 +307,9 @@ export class ai extends Component {
                 this.gameState = GameState.PLAYER_WIN;
                 this.updateStatusText('玩家获胜！');
                 this.playVictorySound();
+                
+                // 上传获胜记录
+                this.uploadWinRecord();
                 return;
             }
 
@@ -166,6 +317,9 @@ export class ai extends Component {
             if (this.checkDraw()) {
                 this.gameState = GameState.DRAW;
                 this.updateStatusText('平局！');
+                
+                // 上传平局记录
+                this.uploadGameRecord('draw');
                 return;
             }
 
@@ -224,6 +378,9 @@ export class ai extends Component {
                 this.gameState = GameState.AI_WIN;
                 this.updateStatusText('AI获胜！');
                 this.playDefeatSound();
+                
+                // 上传失败记录
+                this.uploadGameRecord('lose');
                 return;
             }
 
@@ -231,6 +388,9 @@ export class ai extends Component {
             if (this.checkDraw()) {
                 this.gameState = GameState.DRAW;
                 this.updateStatusText('平局！');
+                
+                // 上传平局记录
+                this.uploadGameRecord('draw');
                 return;
             }
 

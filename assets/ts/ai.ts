@@ -1,4 +1,4 @@
-import { _decorator, Component, director, Node, Prefab, instantiate, Vec3, UITransform, Color, Label, RichText, AudioClip, AudioSource } from 'cc';
+import { _decorator, Component, director, Node, Prefab, instantiate, Vec3, UITransform, Color, Label, RichText, AudioClip, AudioSource, Sprite } from 'cc';
 import { CloudManager } from './CloudManager';
 const { ccclass, property } = _decorator;
 
@@ -44,6 +44,13 @@ export class ai extends Component {
     defeatAudio: AudioClip = null;
 
     private audioSource: AudioSource = null;
+
+    // 排行榜相关
+    @property(Node)
+    rankNode: Node = null;
+
+    @property(Prefab)
+    playerPrefab: Prefab = null;
     
     // 微信云开发
     private cloudManager: CloudManager = null;
@@ -64,6 +71,9 @@ export class ai extends Component {
     private moveHistory: Array<{ x: number, y: number, pieceType: PieceType }> = [];
     private lastAIMove: { x: number, y: number } | null = null;
 
+    // 排行榜相关
+    private rankList: Node[] = [];
+
     start() {
         // 初始化音频源
         this.initAudioSource();
@@ -73,6 +83,7 @@ export class ai extends Component {
         
         this.initGame();
         this.setupBoardClick();
+        this.initRankList();
     }
 
     update(deltaTime: number) {
@@ -310,6 +321,9 @@ export class ai extends Component {
                 
                 // 上传获胜记录
                 this.uploadWinRecord();
+                
+                // 刷新排行榜
+                this.initRankList();
                 return;
             }
 
@@ -320,6 +334,9 @@ export class ai extends Component {
                 
                 // 上传平局记录
                 this.uploadGameRecord('draw');
+                
+                // 刷新排行榜
+                this.initRankList();
                 return;
             }
 
@@ -381,6 +398,9 @@ export class ai extends Component {
                 
                 // 上传失败记录
                 this.uploadGameRecord('lose');
+                
+                // 刷新排行榜
+                this.initRankList();
                 return;
             }
 
@@ -391,6 +411,9 @@ export class ai extends Component {
                 
                 // 上传平局记录
                 this.uploadGameRecord('draw');
+                
+                // 刷新排行榜
+                this.initRankList();
                 return;
             }
 
@@ -579,6 +602,186 @@ export class ai extends Component {
         }
     }
 
+    // 初始化排行榜
+    private async initRankList() {
+        console.log('开始初始化排行榜...');
+        
+        if (!this.rankNode) {
+            console.error('排行榜节点未设置');
+            return;
+        }
+        
+        if (!this.playerPrefab) {
+            console.error('玩家预制体未设置');
+            return;
+        }
+
+        console.log('排行榜节点和预制体设置正确');
+
+        try {
+            // 从云开发获取排行榜数据
+            const rankData = await this.getRankData();
+            
+            console.log('获取到排行榜数据，条数:', rankData.length);
+            
+            // 清除现有的排行榜项（保留player1）
+            this.clearRankList();
+            
+            // 生成排行榜
+            this.createRankList(rankData);
+            
+            console.log('排行榜初始化完成');
+            
+        } catch (error) {
+            console.error('初始化排行榜失败:', error);
+        }
+    }
+
+    // 从云开发获取排行榜数据
+    private async getRankData(): Promise<Array<{nickname: string, avatarUrl: string, winCount: number}>> {
+        if (!this.cloudManager || !this.cloudManager.isInitialized() || !this.db) {
+            console.log('CloudManager未初始化，使用模拟数据');
+            return this.getMockRankData();
+        }
+
+        try {
+            console.log('开始获取排行榜数据...');
+            const queryResult = await this.db.collection('ai_battle_records')
+                .orderBy('winCount', 'desc')
+                .limit(10)
+                .get();
+
+            console.log('查询结果:', queryResult);
+
+            if (queryResult.data && queryResult.data.length > 0) {
+                console.log('获取到数据库数据，条数:', queryResult.data.length);
+                const rankData = queryResult.data.map(record => ({
+                    nickname: record.nickname || '匿名用户',
+                    avatarUrl: record.avatarUrl || '',
+                    winCount: record.winCount || 0
+                }));
+                console.log('处理后的排行榜数据:', rankData);
+                return rankData;
+            } else {
+                console.log('数据库中没有数据，使用模拟数据');
+                return this.getMockRankData();
+            }
+        } catch (error) {
+            console.error('获取排行榜数据失败:', error);
+            return this.getMockRankData();
+        }
+    }
+
+    // 模拟排行榜数据
+    private getMockRankData(): Array<{nickname: string, avatarUrl: string, winCount: number}> {
+        return [
+            { nickname: 'AI大师', avatarUrl: '', winCount: 15 },
+            { nickname: '围棋高手', avatarUrl: '', winCount: 12 },
+            { nickname: '五子棋王', avatarUrl: '', winCount: 10 },
+            { nickname: '策略玩家', avatarUrl: '', winCount: 8 },
+            { nickname: '新手挑战者', avatarUrl: '', winCount: 5 }
+        ];
+    }
+
+    // 清除现有的排行榜项（保留player1）
+    private clearRankList() {
+        // 清除之前动态创建的排行榜项
+        for (let i = 1; i < this.rankList.length; i++) {
+            if (this.rankList[i] && this.rankList[i].isValid) {
+                this.rankList[i].destroy();
+            }
+        }
+        this.rankList = [];
+    }
+
+    // 创建排行榜列表
+    private createRankList(rankData: Array<{nickname: string, avatarUrl: string, winCount: number}>) {
+        if (!this.rankNode || !this.playerPrefab) return;
+
+        console.log('开始创建排行榜，数据条数:', rankData.length);
+        console.log('排行榜数据:', rankData);
+
+        // player1节点已经存在于场景中，作为第一名
+        const player1Node = this.rankNode.getChildByName('player1');
+        if (player1Node) {
+            this.rankList[0] = player1Node;
+            if (rankData.length > 0) {
+                console.log('更新player1节点数据:', rankData[0]);
+                this.updatePlayerNode(player1Node, 1, rankData[0]);
+            } else {
+                console.log('没有数据，使用默认值更新player1');
+                this.updatePlayerNode(player1Node, 1, { nickname: '暂无数据', avatarUrl: '', winCount: 0 });
+            }
+        } else {
+            console.error('未找到player1节点');
+        }
+
+        // 从第二名开始创建
+        const startY = -125; // player1的Y坐标
+        const offsetY = -80;  // 每个玩家的间隔
+
+        for (let i = 1; i < Math.min(rankData.length, 10); i++) {
+            const playerNode = instantiate(this.playerPrefab);
+            const rank = i + 1;
+            const y = startY + (i * offsetY);
+            
+            playerNode.setPosition(10, y, 0);
+            this.rankNode.addChild(playerNode);
+            this.rankList[i] = playerNode;
+            
+            console.log(`创建第${rank}名玩家节点:`, rankData[i]);
+            this.updatePlayerNode(playerNode, rank, rankData[i]);
+        }
+    }
+
+    // 更新玩家节点信息
+    private updatePlayerNode(playerNode: Node, rank: number, data: {nickname: string, avatarUrl: string, winCount: number}) {
+        if (!playerNode) {
+            console.error('玩家节点为空');
+            return;
+        }
+
+        console.log(`更新玩家节点 - 排名:${rank}, 数据:`, data);
+
+        // 更新排名
+        const rankLabel = playerNode.getChildByName('rank')?.getComponent(Label);
+        if (rankLabel) {
+            rankLabel.string = rank.toString();
+            console.log(`设置排名: ${rank}`);
+        } else {
+            console.error('未找到rank标签组件');
+        }
+
+        // 更新头像（如果有头像URL，这里可以扩展加载网络图片）
+        const avatarSprite = playerNode.getChildByName('avatar')?.getComponent(Sprite);
+        if (avatarSprite) {
+            if (data.avatarUrl) {
+                // 这里可以加载网络头像，暂时使用默认头像
+                console.log('设置头像:', data.avatarUrl);
+            }
+        } else {
+            console.error('未找到avatar精灵组件');
+        }
+
+        // 更新昵称
+        const nicknameLabel = playerNode.getChildByName('nickname')?.getComponent(Label);
+        if (nicknameLabel) {
+            nicknameLabel.string = data.nickname;
+            console.log(`设置昵称: ${data.nickname}`);
+        } else {
+            console.error('未找到nickname标签组件');
+        }
+
+        // 更新获胜次数
+        const winCountLabel = playerNode.getChildByName('winCount')?.getComponent(Label);
+        if (winCountLabel) {
+            winCountLabel.string = data.winCount.toString();
+            console.log(`设置获胜次数: ${data.winCount}`);
+        } else {
+            console.error('未找到winCount标签组件');
+        }
+    }
+
     // 悔棋按钮点击事件
     onUndoMove() {
         // 播放按钮音效
@@ -650,6 +853,17 @@ export class ai extends Component {
             }
         }
         this.initGame();
+    }
+
+    // 刷新排行榜按钮点击事件
+    onRefreshRankClick() {
+        console.log('刷新排行榜按钮被点击');
+        
+        // 播放按钮音效
+        this.playButtonClickSound();
+        
+        // 重新初始化排行榜
+        this.initRankList();
     }
 
     // 返回主页按钮点击事件

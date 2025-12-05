@@ -47,10 +47,19 @@ export class ai extends Component {
 
     // 排行榜相关
     @property(Node)
-    rankNode: Node = null;
+    rankNode: Node = null;         // 排行榜容器节点（包含player1等子节点）
+
+    @property(Node)
+    rankParentNode: Node = null;    // 排行榜父节点（用于显示/隐藏整个排行榜）
 
     @property(Prefab)
     playerPrefab: Prefab = null;
+
+    @property(Node)
+    showRankButton: Node = null;  // 显示排行榜按钮
+
+    @property(Node)
+    closeRankButton: Node = null; // 关闭排行榜按钮
     
     // 微信云开发
     private cloudManager: CloudManager = null;
@@ -73,6 +82,7 @@ export class ai extends Component {
 
     // 排行榜相关
     private rankList: Node[] = [];
+    private isRankVisible: boolean = false; // 排行榜是否可见
 
     start() {
         // 初始化音频源
@@ -83,7 +93,11 @@ export class ai extends Component {
         
         this.initGame();
         this.setupBoardClick();
+        this.initRankButtons();
         this.initRankList();
+        
+        // 初始隐藏排行榜
+        this.hideRankList();
     }
 
     update(deltaTime: number) {
@@ -322,8 +336,10 @@ export class ai extends Component {
                 // 上传获胜记录
                 this.uploadWinRecord();
                 
-                // 刷新排行榜
-                this.initRankList();
+                // 刷新排行榜（仅在排行榜可见时）
+                if (this.isRankVisible) {
+                    this.initRankList();
+                }
                 return;
             }
 
@@ -335,8 +351,10 @@ export class ai extends Component {
                 // 上传平局记录
                 this.uploadGameRecord('draw');
                 
-                // 刷新排行榜
-                this.initRankList();
+                // 刷新排行榜（仅在排行榜可见时）
+                if (this.isRankVisible) {
+                    this.initRankList();
+                }
                 return;
             }
 
@@ -399,8 +417,10 @@ export class ai extends Component {
                 // 上传失败记录
                 this.uploadGameRecord('lose');
                 
-                // 刷新排行榜
-                this.initRankList();
+                // 刷新排行榜（仅在排行榜可见时）
+                if (this.isRankVisible) {
+                    this.initRankList();
+                }
                 return;
             }
 
@@ -412,8 +432,10 @@ export class ai extends Component {
                 // 上传平局记录
                 this.uploadGameRecord('draw');
                 
-                // 刷新排行榜
-                this.initRankList();
+                // 刷新排行榜（仅在排行榜可见时）
+                if (this.isRankVisible) {
+                    this.initRankList();
+                }
                 return;
             }
 
@@ -855,6 +877,76 @@ export class ai extends Component {
         this.initGame();
     }
 
+    // 初始化排行榜按钮
+    private initRankButtons() {
+        // 设置显示排行榜按钮点击事件
+        if (this.showRankButton) {
+            this.showRankButton.on(Node.EventType.TOUCH_START, this.onShowRankClick, this);
+        } else {
+            console.warn('显示排行榜按钮未设置');
+        }
+
+        // 设置关闭排行榜按钮点击事件
+        if (this.closeRankButton) {
+            this.closeRankButton.on(Node.EventType.TOUCH_START, this.onCloseRankClick, this);
+        } else {
+            console.warn('关闭排行榜按钮未设置');
+        }
+    }
+
+    // 显示排行榜按钮点击事件
+    onShowRankClick() {
+        console.log('显示排行榜按钮被点击');
+        
+        // 播放按钮音效
+        this.playButtonClickSound();
+        
+        // 显示排行榜
+        this.showRankList();
+        
+        // 刷新排行榜数据
+        this.initRankList();
+    }
+
+    // 关闭排行榜按钮点击事件
+    onCloseRankClick() {
+        console.log('关闭排行榜按钮被点击');
+        
+        // 播放按钮音效
+        this.playButtonClickSound();
+        
+        // 隐藏排行榜
+        this.hideRankList();
+    }
+
+    // 显示排行榜
+    private showRankList() {
+        // 优先使用父节点，如果没有设置则使用排行榜节点
+        const targetNode = this.rankParentNode || this.rankNode;
+        
+        if (targetNode) {
+            targetNode.active = true;
+            this.isRankVisible = true;
+            console.log('排行榜已显示');
+        } else {
+            console.error('排行榜节点和父节点都未设置');
+        }
+    }
+
+    // 隐藏排行榜
+    private hideRankList() {
+        // 优先使用父节点，如果没有设置则使用排行榜节点
+        const targetNode = this.rankParentNode || this.rankNode;
+        
+        if (targetNode) {
+            targetNode.active = false;
+            this.isRankVisible = false;
+            console.log('排行榜已隐藏');
+        } else {
+            console.error('排行榜节点和父节点都未设置');
+        }
+    }
+
     // 刷新排行榜按钮点击事件
     onRefreshRankClick() {
         console.log('刷新排行榜按钮被点击');
@@ -924,6 +1016,15 @@ export class ai extends Component {
         // 清理棋盘点击事件监听
         if (this.boardNode && this.boardNode.isValid) {
             this.boardNode.off(Node.EventType.TOUCH_START, this.onBoardClick, this);
+        }
+        
+        // 清理排行榜按钮事件监听
+        if (this.showRankButton && this.showRankButton.isValid) {
+            this.showRankButton.off(Node.EventType.TOUCH_START, this.onShowRankClick, this);
+        }
+        
+        if (this.closeRankButton && this.closeRankButton.isValid) {
+            this.closeRankButton.off(Node.EventType.TOUCH_START, this.onCloseRankClick, this);
         }
         
         // 清理所有定时器

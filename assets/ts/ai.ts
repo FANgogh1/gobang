@@ -1,5 +1,12 @@
-import { _decorator, Component, director, Node, Prefab, instantiate, Vec3, UITransform, Color, Label, RichText, AudioClip, AudioSource, Sprite } from 'cc';
+import { _decorator, Component, director, Node, Prefab, instantiate, Vec3, UITransform, Label, RichText, AudioClip, AudioSource, Sprite, SpriteFrame, Texture2D, ImageAsset } from 'cc';
 import { CloudManager } from './CloudManager';
+
+declare global {
+    interface Window {
+        wx: any;
+    }
+}
+
 const { ccclass, property } = _decorator;
 
 // 棋子类型枚举
@@ -774,12 +781,16 @@ export class ai extends Component {
             console.error('未找到rank标签组件');
         }
 
-        // 更新头像（如果有头像URL，这里可以扩展加载网络图片）
+        // 更新头像
         const avatarSprite = playerNode.getChildByName('avatar')?.getComponent(Sprite);
         if (avatarSprite) {
-            if (data.avatarUrl) {
-                // 这里可以加载网络头像，暂时使用默认头像
-                console.log('设置头像:', data.avatarUrl);
+            if (data.avatarUrl && data.avatarUrl !== '') {
+                // 加载网络头像
+                this.loadRankAvatarImage(avatarSprite, data.avatarUrl);
+                console.log('开始加载头像:', data.avatarUrl);
+            } else {
+                // 使用默认头像
+                console.log('使用默认头像');
             }
         } else {
             console.error('未找到avatar精灵组件');
@@ -945,6 +956,127 @@ export class ai extends Component {
         } else {
             console.error('排行榜节点和父节点都未设置');
         }
+    }
+
+    // 加载排行榜头像图片
+    private loadRankAvatarImage(avatarSprite: Sprite, avatarUrl: string) {
+        if (!avatarSprite) {
+            console.error('avatarSprite为空，无法加载头像');
+            return;
+        }
+
+        console.log('开始加载排行榜头像:', avatarUrl);
+
+        // 检查是否在微信环境中
+        if (typeof window !== 'undefined' && window.wx) {
+            try {
+                // 方法1：尝试使用wx.createImage加载
+                if (window.wx.createImage) {
+                    const image = window.wx.createImage();
+                    image.onload = () => {
+                        try {
+                            // 创建ImageAsset
+                            const imageAsset = new ImageAsset(image);
+                            console.log('使用wx.createImage加载排行榜头像成功');
+                            
+                            // 创建Texture2D
+                            const texture = new Texture2D();
+                            texture.image = imageAsset;
+                            
+                            // 创建SpriteFrame
+                            const spriteFrame = new SpriteFrame();
+                            spriteFrame.texture = texture;
+                            
+                            // 设置到Sprite组件
+                            avatarSprite.spriteFrame = spriteFrame;
+                            console.log('排行榜头像设置成功');
+                        } catch (error) {
+                            console.error('使用wx.createImage创建排行榜SpriteFrame失败:', error);
+                            this.tryDownloadRankAvatar(avatarSprite, avatarUrl);
+                        }
+                    };
+                    
+                    image.onerror = () => {
+                        console.error('wx.createImage加载排行榜头像失败');
+                        this.tryDownloadRankAvatar(avatarSprite, avatarUrl);
+                    };
+                    
+                    image.src = avatarUrl;
+                } else {
+                    // 如果没有wx.createImage，使用downloadFile方法
+                    this.tryDownloadRankAvatar(avatarSprite, avatarUrl);
+                }
+            } catch (error) {
+                console.error('加载排行榜头像时出错:', error);
+                // 使用默认头像
+                console.log('使用默认排行榜头像');
+            }
+        } else {
+            // 非微信环境，使用默认头像
+            console.log('非微信环境，使用默认排行榜头像');
+        }
+    }
+
+    // 尝试使用downloadFile方法下载排行榜头像
+    private tryDownloadRankAvatar(avatarSprite: Sprite, avatarUrl: string) {
+        if (!window.wx || !window.wx.downloadFile) {
+            console.error('微信下载文件API不可用');
+            return;
+        }
+
+        console.log('尝试使用downloadFile下载排行榜头像:', avatarUrl);
+        
+        window.wx.downloadFile({
+            url: avatarUrl,
+            success: (downloadRes: any) => {
+                console.log('排行榜头像下载成功:', downloadRes.tempFilePath);
+                
+                if (window.wx.getFileSystemManager) {
+                    window.wx.getFileSystemManager().readFile({
+                        filePath: downloadRes.tempFilePath,
+                        success: (fileRes: any) => {
+                            try {
+                                const imageData = fileRes.data;
+                                console.log('排行榜头像数据类型:', typeof imageData);
+                                console.log('排行榜头像数据长度:', imageData ? imageData.length : 'undefined');
+                                
+                                if (imageData && imageData.length > 0) {
+                                    // 创建ImageAsset
+                                    const imageAsset = new ImageAsset(imageData);
+                                    console.log('排行榜头像ImageAsset创建成功');
+                                    
+                                    // 创建Texture2D
+                                    const texture = new Texture2D();
+                                    texture.image = imageAsset;
+                                    console.log('排行榜头像Texture2D创建成功');
+                                    
+                                    // 创建SpriteFrame
+                                    const spriteFrame = new SpriteFrame();
+                                    spriteFrame.texture = texture;
+                                    console.log('排行榜头像SpriteFrame创建成功');
+                                    
+                                    // 设置到Sprite组件
+                                    avatarSprite.spriteFrame = spriteFrame;
+                                    console.log('排行榜头像设置成功:', downloadRes.tempFilePath);
+                                } else {
+                                    console.error('排行榜头像数据为空');
+                                }
+                            } catch (error) {
+                                console.error('处理排行榜头像数据失败:', error);
+                            }
+                        },
+                        fail: (fileErr: any) => {
+                            console.error('读取排行榜头像文件失败:', fileErr);
+                        }
+                    });
+                } else {
+                    console.error('FileSystemManager不可用');
+                }
+            },
+            fail: (downloadErr: any) => {
+                console.error('下载排行榜头像失败:', downloadErr);
+            }
+        });
     }
 
     // 刷新排行榜按钮点击事件

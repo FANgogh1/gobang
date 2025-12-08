@@ -158,6 +158,13 @@ export class home extends Component {
     onAiBattleButtonClick() {
         console.log('AI对战按钮被点击');
         this.playButtonClickSound();
+        
+        // 检查用户是否登录
+        if (!this.isUserLoggedIn()) {
+            this.showLoginRequiredDialog('AI对战');
+            return;
+        }
+        
         this.loadScene('ai-battle');
     }
 
@@ -224,12 +231,12 @@ export class home extends Component {
     }
 
     // 显示需要登录的提示对话框
-    private showLoginRequiredDialog() {
+    private showLoginRequiredDialog(mode: string = '联机对战') {
         if (typeof wx !== 'undefined' && wx.showModal) {
             // 微信小程序环境
             wx.showModal({
                 title: '提示',
-                content: '您还未登录，无法进入联机对战模式。\n请先到个人中心进行登录。',
+                content: `您还未登录，无法进入${mode}模式。\n请先到个人中心进行登录。`,
                 showCancel: true,
                 cancelText: '返回',
                 confirmText: '去登录',
@@ -242,7 +249,7 @@ export class home extends Component {
             });
         } else {
             // 开发环境，使用原生confirm
-            const result = confirm('您还未登录，无法进入联机对战模式。\n是否前往个人中心进行登录？');
+            const result = confirm(`您还未登录，无法进入${mode}模式。\n是否前往个人中心进行登录？`);
             if (result) {
                 this.loadScene('profile');
             }

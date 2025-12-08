@@ -101,6 +101,13 @@ export class online extends Component {
     private isResettingGame: boolean = false; // 防止重置过程中重复操作
     private isCreatingRoom: boolean = false; // 防止重复创建房间
     private isInitialized: boolean = false; // 防止重复初始化
+    
+    // 防抖相关
+    private canPlacePiece: boolean = true;
+    private placePieceDebounceTime: number = 300; // 300ms防抖时间
+    
+    // 房间状态变化检测
+    private lastKnownRoomState: any = null;
 
     // 用户信息
     private currentUserInfo: any = null;
@@ -815,23 +822,46 @@ export class online extends Component {
             clearInterval(this.roomRefreshTimer);
         }
         
-        // 每3秒检查一次房间状态
+        // 降低刷新频率，从3秒改为5秒，减少不必要的请求
         this.roomRefreshTimer = setInterval(async () => {
             if (this.roomId) {
                 try {
                     const room = await this.cloudManager.getRoom(this.roomId);
                     if (room) {
-                        console.log('定期刷新获取到房间状态:', room);
-                        this.onRoomUpdate(room);
+                        // 只在状态确实有变化时才更新UI
+                        if (this.hasRoomStateChanged(room)) {
+                            console.log('定期刷新获取到房间状态:', room);
+                            this.onRoomUpdate(room);
+                        }
                     }
                 } catch (error) {
                     console.error('定期刷新房间状态失败:', error);
                 }
             }
-        }, 3000);
+        }, 5000); // 从3秒改为5秒
     }
     
     private roomRefreshTimer: NodeJS.Timeout | null = null;
+
+    // 检查房间状态是否有变化
+    private hasRoomStateChanged(room: RoomData): boolean {
+        if (!this.lastKnownRoomState) {
+            this.lastKnownRoomState = JSON.parse(JSON.stringify(room));
+            return true;
+        }
+        
+        // 比较关键状态
+        const stateChanged = 
+            room.currentPlayer !== this.lastKnownRoomState.currentPlayer ||
+            room.gameStatus !== this.lastKnownRoomState.gameStatus ||
+            JSON.stringify(room.gameState) !== JSON.stringify(this.lastKnownRoomState.gameState);
+        
+        if (stateChanged) {
+            this.lastKnownRoomState = JSON.parse(JSON.stringify(room));
+        }
+        
+        return stateChanged;
+    }
 
     // 房间状态更新
     private async onRoomUpdate(room: RoomData | null | undefined) {
@@ -966,49 +996,41 @@ export class online extends Component {
             return;
         }
         
-        console.log('更新棋盘显示，当前棋盘状态:', this.board);
+        console.log('差异更新棋盘显示，当前棋盘状态:', this.board);
         
-        // 清除现有棋子
+        // 只更新变化的棋子，而不是重建整个棋盘
         for (let y = 0; y < this.BOARD_SIZE; y++) {
-            // 确保当前行存在
             if (!this.pieces[y]) {
                 this.pieces[y] = [];
             }
             
             for (let x = 0; x < this.BOARD_SIZE; x++) {
-                // 确保当前位置存在
-                if (!this.pieces[y][x]) {
-                    this.pieces[y][x] = null;
-                }
+                const currentPiece = this.board[y][x];
+                const hasPiece = this.pieces[y][x] && this.pieces[y][x].isValid;
                 
-                // 销毁现有棋子
-                if (this.pieces[y][x] && this.pieces[y][x].isValid) {
-                    this.pieces[y][x].destroy();
-                    this.pieces[y][x] = null;
-                }
-                
-                // 重新创建棋子
-                if (this.board[y] && this.board[y][x] !== PieceType.EMPTY) {
-                    const prefab = this.board[y][x] === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
-                    if (prefab) {
-                        const pieceNode = instantiate(prefab);
-                        const worldPos = this.boardToWorldPosition(x, y);
-                        pieceNode.setPosition(worldPos);
-                        this.boardNode.addChild(pieceNode);
-                        this.pieces[y][x] = pieceNode;
-                        
-                        // 记录创建的棋子，便于调试
-                        if (this.board[y][x] === PieceType.BLACK) {
-                            console.log(`创建黑子 at (${x}, ${y})`);
-                        } else {
-                            console.log(`创建白子 at (${x}, ${y})`);
-                        }
+                if (currentPiece !== PieceType.EMPTY && !hasPiece) {
+                    // 需要添加棋子
+                    this.createPieceAt(x, y, currentPiece);
+                    console.log(`添加${currentPiece === PieceType.BLACK ? '黑' : '白'}子 at (${x}, ${y})`);
+                } else if (currentPiece === PieceType.EMPTY && hasPiece) {
+                    // 需要移除棋子
+                    this.removePieceAt(x, y);
+                    console.log(`移除棋子 at (${x}, ${y})`);
+                } else if (currentPiece !== PieceType.EMPTY && hasPiece) {
+                    // 检查棋子类型是否正确（处理可能的棋子类型错误）
+                    const existingPieceType = this.board[y][x];
+                    const expectedPrefab = existingPieceType === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
+                    if (!expectedPrefab || !this.pieces[y][x].isValid) {
+                        // 重建棋子
+                        this.removePieceAt(x, y);
+                        this.createPieceAt(x, y, currentPiece);
+                        console.log(`重建棋子 at (${x}, ${y})`);
                     }
                 }
             }
         }
         
-        console.log('棋盘更新完成，棋子数量统计:', this.countPieces());
+        console.log('棋盘差异更新完成，棋子数量统计:', this.countPieces());
     }
     
     // 统计棋子数量（用于调试）
@@ -1031,9 +1053,15 @@ export class online extends Component {
 
     // 棋盘点击事件
     private onBoardClick(event: any) {
-        if (!this.isMyTurn || this.gameState !== GameState.PLAYING || !this.roomId) {
+        if (!this.isMyTurn || this.gameState !== GameState.PLAYING || !this.roomId || !this.canPlacePiece) {
             return;
         }
+
+        // 设置防抖
+        this.canPlacePiece = false;
+        setTimeout(() => {
+            this.canPlacePiece = true;
+        }, this.placePieceDebounceTime);
 
         const touchPos = event.getUILocation();
         const localPos = this.boardNode.getComponent(UITransform).convertToNodeSpaceAR(new Vec3(touchPos.x, touchPos.y, 0));
@@ -1048,37 +1076,38 @@ export class online extends Component {
 
     // 落子
     private async placePiece(x: number, y: number) {
+        // 立即更新本地状态和UI，提供即时反馈
         this.board[y][x] = this.currentPlayer;
+        this.createPieceAt(x, y, this.currentPlayer);
+        this.playPlacePieceSound();
         
-        // 创建棋子
-        const prefab = this.currentPlayer === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
-        if (prefab) {
-            const pieceNode = instantiate(prefab);
-            const worldPos = this.boardToWorldPosition(x, y);
-            pieceNode.setPosition(worldPos);
-            this.boardNode.addChild(pieceNode);
-            this.pieces[y][x] = pieceNode;
-            
-            this.playPlacePieceSound();
-        }
+        // 禁用棋盘点击，防止重复操作
+        this.isMyTurn = false;
+        
+        try {
+            // 异步更新云端状态
+            const nextPlayer = this.currentPlayer === PieceType.BLACK ? PieceType.WHITE : PieceType.BLACK;
+            await this.cloudManager.updateGameState(this.roomId, this.board, nextPlayer);
 
-        // 先更新游戏状态，确保最后一颗棋子被同步
-        const nextPlayer = this.currentPlayer === PieceType.BLACK ? PieceType.WHITE : PieceType.BLACK;
-        await this.cloudManager.updateGameState(this.roomId, this.board, nextPlayer);
+            // 检查获胜
+            if (this.checkWin(x, y, this.currentPlayer)) {
+                this.playWinSound();
+                await this.cloudManager.finishGame(this.roomId, this.playerRole);
+                return;
+            }
 
-        // 检查获胜
-        if (this.checkWin(x, y, this.currentPlayer)) {
-            // 播放获胜音效（当前玩家获胜）
-            this.playWinSound();
-            await this.cloudManager.finishGame(this.roomId, this.playerRole);
-            return;
-        }
-
-        // 检查平局
-        if (this.checkDraw()) {
-            // 平局不播放特殊音效
-            await this.cloudManager.finishGame(this.roomId, 0); // 0表示平局
-            return;
+            // 检查平局
+            if (this.checkDraw()) {
+                await this.cloudManager.finishGame(this.roomId, 0); // 0表示平局
+                return;
+            }
+        } catch (error) {
+            console.error('更新游戏状态失败:', error);
+            // 如果云端更新失败，恢复棋盘状态并允许重新下棋
+            this.board[y][x] = PieceType.EMPTY;
+            this.removePieceAt(x, y);
+            this.isMyTurn = true;
+            this.updateStatusText('操作失败，请重试');
         }
     }
 
@@ -1130,6 +1159,26 @@ export class online extends Component {
     // 检查位置有效性
     private isValidPosition(x: number, y: number): boolean {
         return x >= 0 && x < this.BOARD_SIZE && y >= 0 && y < this.BOARD_SIZE;
+    }
+
+    // 创建单个棋子
+    private createPieceAt(x: number, y: number, pieceType: PieceType) {
+        const prefab = pieceType === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
+        if (prefab && !this.pieces[y][x]) {
+            const pieceNode = instantiate(prefab);
+            const worldPos = this.boardToWorldPosition(x, y);
+            pieceNode.setPosition(worldPos);
+            this.boardNode.addChild(pieceNode);
+            this.pieces[y][x] = pieceNode;
+        }
+    }
+
+    // 移除单个棋子
+    private removePieceAt(x: number, y: number) {
+        if (this.pieces[y] && this.pieces[y][x] && this.pieces[y][x].isValid) {
+            this.pieces[y][x].destroy();
+            this.pieces[y][x] = null;
+        }
     }
 
     // 棋盘坐标转世界坐标

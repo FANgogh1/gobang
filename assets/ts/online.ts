@@ -78,6 +78,19 @@ export class online extends Component {
     @property(SpriteFrame)
     defaultAvatar: SpriteFrame = null;
 
+    // 获胜和失败面板
+    @property(Node)
+    winPanel: Node = null;
+
+    @property(Node)
+    losePanel: Node = null;
+
+    @property(Button)
+    winPanelCloseBtn: Button = null;
+
+    @property(Button)
+    losePanelCloseBtn: Button = null;
+
     private audioSource: AudioSource = null;
     private cloudManager: CloudManager = null;
 
@@ -149,6 +162,7 @@ export class online extends Component {
 
         this.initGame();
         this.setupButtons();
+        this.initPanels(); // 初始化面板状态
         this.initUserInfo();
         await this.loginAndSetup();
     }
@@ -206,6 +220,18 @@ export class online extends Component {
         this.updateStatusText('请创建房间或加入游戏');
     }
 
+    // 初始化面板状态
+    private initPanels() {
+        // 确保面板初始状态为隐藏
+        if (this.winPanel) {
+            this.winPanel.active = false;
+        }
+        if (this.losePanel) {
+            this.losePanel.active = false;
+        }
+        console.log('面板状态已初始化为隐藏');
+    }
+
     // 设置按钮事件
     private setupButtons() {
         console.log('设置按钮事件监听器');
@@ -247,6 +273,16 @@ export class online extends Component {
         if (this.boardNode) {
             this.boardNode.off(Node.EventType.TOUCH_START, this.onBoardClick, this);
             this.boardNode.on(Node.EventType.TOUCH_START, this.onBoardClick, this);
+        }
+        
+        // 设置面板关闭按钮事件
+        if (this.winPanelCloseBtn) {
+            this.winPanelCloseBtn.node.off(Button.EventType.CLICK, this.onWinPanelCloseClick, this);
+            this.winPanelCloseBtn.node.on(Button.EventType.CLICK, this.onWinPanelCloseClick, this);
+        }
+        if (this.losePanelCloseBtn) {
+            this.losePanelCloseBtn.node.off(Button.EventType.CLICK, this.onLosePanelCloseClick, this);
+            this.losePanelCloseBtn.node.on(Button.EventType.CLICK, this.onLosePanelCloseClick, this);
         }
         
         // 添加键盘快捷键用于调试（开发环境）
@@ -899,11 +935,19 @@ export class online extends Component {
             const winnerText = room.winner === this.playerRole ? '你赢了！' : '你输了！';
             this.updateStatusText(winnerText);
             
-            // 播放获胜或失败音效
+            // 播放获胜或失败音效并显示对应面板
             if (room.winner === this.playerRole) {
                 this.playWinSound();
+                // 延迟显示获胜面板，让用户先听到音效
+                setTimeout(() => {
+                    this.showWinPanel();
+                }, 500);
             } else {
                 this.playLoseSound();
+                // 延迟显示失败面板，让用户先听到音效
+                setTimeout(() => {
+                    this.showLosePanel();
+                }, 500);
             }
             
             // 确保最终的棋盘状态被正确显示
@@ -1352,6 +1396,56 @@ export class online extends Component {
         }
     }
 
+    // 显示获胜面板
+    private showWinPanel() {
+        if (this.winPanel) {
+            this.winPanel.active = true;
+            console.log('显示获胜面板');
+        } else {
+            console.warn('获胜面板未设置');
+        }
+    }
+
+    // 显示失败面板
+    private showLosePanel() {
+        if (this.losePanel) {
+            this.losePanel.active = true;
+            console.log('显示失败面板');
+        } else {
+            console.warn('失败面板未设置');
+        }
+    }
+
+    // 隐藏获胜面板
+    private hideWinPanel() {
+        if (this.winPanel) {
+            this.winPanel.active = false;
+            console.log('隐藏获胜面板');
+        }
+    }
+
+    // 隐藏失败面板
+    private hideLosePanel() {
+        if (this.losePanel) {
+            this.losePanel.active = false;
+            console.log('隐藏失败面板');
+        }
+    }
+
+    // 获胜面板关闭按钮点击事件
+    private onWinPanelCloseClick() {
+        console.log('获胜面板关闭按钮被点击');
+        this.playButtonClickSound();
+        this.hideWinPanel();
+    }
+
+    // 失败面板关闭按钮点击事件
+    private onLosePanelCloseClick() {
+        console.log('失败面板关闭按钮被点击');
+        this.playButtonClickSound();
+        this.hideLosePanel();
+    }
+
     async onDestroy() {
         console.log('销毁online组件，清理资源');
         
@@ -1389,6 +1483,14 @@ export class online extends Component {
         }
         if (this.boardNode && this.boardNode.isValid) {
             this.boardNode.off(Node.EventType.TOUCH_START, this.onBoardClick, this);
+        }
+        
+        // 清理面板按钮事件监听
+        if (this.winPanelCloseBtn && this.winPanelCloseBtn.node && this.winPanelCloseBtn.node.isValid) {
+            this.winPanelCloseBtn.node.off(Button.EventType.CLICK, this.onWinPanelCloseClick, this);
+        }
+        if (this.losePanelCloseBtn && this.losePanelCloseBtn.node && this.losePanelCloseBtn.node.isValid) {
+            this.losePanelCloseBtn.node.off(Button.EventType.CLICK, this.onLosePanelCloseClick, this);
         }
     }
 }

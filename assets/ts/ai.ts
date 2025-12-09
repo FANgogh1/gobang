@@ -1,4 +1,4 @@
-import { _decorator, Component, director, Node, Prefab, instantiate, Vec3, UITransform, Label, RichText, AudioClip, AudioSource, Sprite, SpriteFrame, Texture2D, ImageAsset } from 'cc';
+import { _decorator, Component, director, Node, Prefab, instantiate, Vec3, UITransform, Label, RichText, AudioClip, AudioSource, Sprite, SpriteFrame, Texture2D, ImageAsset, Button } from 'cc';
 import { CloudManager } from './CloudManager';
 
 declare global {
@@ -68,6 +68,19 @@ export class ai extends Component {
     @property(Node)
     closeRankButton: Node = null; // 关闭排行榜按钮
     
+    // 获胜和失败面板
+    @property(Node)
+    winPanel: Node = null;
+
+    @property(Node)
+    losePanel: Node = null;
+
+    @property(Button)
+    winPanelCloseBtn: Button = null;
+
+    @property(Button)
+    losePanelCloseBtn: Button = null;
+    
     // 微信云开发
     private cloudManager: CloudManager = null;
     private db: any = null;
@@ -102,6 +115,7 @@ export class ai extends Component {
         this.setupBoardClick();
         this.initRankButtons();
         this.initRankList();
+        this.initPanels(); // 初始化面板状态
         
         // 初始隐藏排行榜
         this.hideRankList();
@@ -310,6 +324,18 @@ export class ai extends Component {
         this.updateStatusText('开始游戏');
     }
 
+    // 初始化面板状态
+    private initPanels() {
+        // 确保面板初始状态为隐藏
+        if (this.winPanel) {
+            this.winPanel.active = false;
+        }
+        if (this.losePanel) {
+            this.losePanel.active = false;
+        }
+        console.log('AI对战面板状态已初始化为隐藏');
+    }
+
     // 设置棋盘点击事件
     private setupBoardClick() {
         if (this.boardNode) {
@@ -339,6 +365,11 @@ export class ai extends Component {
                 this.gameState = GameState.PLAYER_WIN;
                 this.updateStatusText('玩家获胜！');
                 this.playVictorySound();
+                
+                // 延迟显示获胜面板，让用户先听到音效
+                setTimeout(() => {
+                    this.showWinPanel();
+                }, 500);
                 
                 // 上传获胜记录
                 this.uploadWinRecord();
@@ -420,6 +451,11 @@ export class ai extends Component {
                 this.gameState = GameState.AI_WIN;
                 this.updateStatusText('AI获胜！');
                 this.playDefeatSound();
+                
+                // 延迟显示失败面板，让用户先听到音效
+                setTimeout(() => {
+                    this.showLosePanel();
+                }, 500);
                 
                 // 上传失败记录
                 this.uploadGameRecord('lose');
@@ -903,6 +939,16 @@ export class ai extends Component {
         } else {
             console.warn('关闭排行榜按钮未设置');
         }
+        
+        // 设置面板关闭按钮事件
+        if (this.winPanelCloseBtn) {
+            this.winPanelCloseBtn.node.off(Button.EventType.CLICK, this.onWinPanelCloseClick, this);
+            this.winPanelCloseBtn.node.on(Button.EventType.CLICK, this.onWinPanelCloseClick, this);
+        }
+        if (this.losePanelCloseBtn) {
+            this.losePanelCloseBtn.node.off(Button.EventType.CLICK, this.onLosePanelCloseClick, this);
+            this.losePanelCloseBtn.node.on(Button.EventType.CLICK, this.onLosePanelCloseClick, this);
+        }
     }
 
     // 显示排行榜按钮点击事件
@@ -956,6 +1002,56 @@ export class ai extends Component {
         } else {
             console.error('排行榜节点和父节点都未设置');
         }
+    }
+
+    // 显示获胜面板
+    private showWinPanel() {
+        if (this.winPanel) {
+            this.winPanel.active = true;
+            console.log('显示AI对战获胜面板');
+        } else {
+            console.warn('AI对战获胜面板未设置');
+        }
+    }
+
+    // 显示失败面板
+    private showLosePanel() {
+        if (this.losePanel) {
+            this.losePanel.active = true;
+            console.log('显示AI对战失败面板');
+        } else {
+            console.warn('AI对战失败面板未设置');
+        }
+    }
+
+    // 隐藏获胜面板
+    private hideWinPanel() {
+        if (this.winPanel) {
+            this.winPanel.active = false;
+            console.log('隐藏AI对战获胜面板');
+        }
+    }
+
+    // 隐藏失败面板
+    private hideLosePanel() {
+        if (this.losePanel) {
+            this.losePanel.active = false;
+            console.log('隐藏AI对战失败面板');
+        }
+    }
+
+    // 获胜面板关闭按钮点击事件
+    private onWinPanelCloseClick() {
+        console.log('AI对战获胜面板关闭按钮被点击');
+        this.playButtonClickSound();
+        this.hideWinPanel();
+    }
+
+    // 失败面板关闭按钮点击事件
+    private onLosePanelCloseClick() {
+        console.log('AI对战失败面板关闭按钮被点击');
+        this.playButtonClickSound();
+        this.hideLosePanel();
     }
 
     // 加载排行榜头像图片
@@ -1157,6 +1253,14 @@ export class ai extends Component {
         
         if (this.closeRankButton && this.closeRankButton.isValid) {
             this.closeRankButton.off(Node.EventType.TOUCH_START, this.onCloseRankClick, this);
+        }
+        
+        // 清理面板按钮事件监听
+        if (this.winPanelCloseBtn && this.winPanelCloseBtn.node && this.winPanelCloseBtn.node.isValid) {
+            this.winPanelCloseBtn.node.off(Button.EventType.CLICK, this.onWinPanelCloseClick, this);
+        }
+        if (this.losePanelCloseBtn && this.losePanelCloseBtn.node && this.losePanelCloseBtn.node.isValid) {
+            this.losePanelCloseBtn.node.off(Button.EventType.CLICK, this.onLosePanelCloseClick, this);
         }
         
         // 清理所有定时器

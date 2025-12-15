@@ -610,7 +610,7 @@ export class funmode extends Component {
         }
     }
 
-    // 只显示当前玩家的棋子（所有棋子都显示为当前玩家的颜色）
+    // 只显示当前玩家的棋子（所有棋子都显示为当前玩家的颜色，但红色棋子保持红色）
     private showOnlyCurrentPlayerPieces() {
         for (let y = 0; y < this.BOARD_SIZE; y++) {
             for (let x = 0; x < this.BOARD_SIZE; x++) {
@@ -620,9 +620,19 @@ export class funmode extends Component {
                     this.pieces[y][x] = null;
                 }
 
-                // 如果该位置有棋子（不管是黑子还是白子），都显示为当前玩家的颜色
+                // 如果该位置有棋子
                 if (this.board[y][x] !== PieceType.EMPTY) {
-                    const prefab = this.currentPlayer === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
+                    let prefab: Prefab;
+                    
+                    // 根据棋子类型选择预制体
+                    if (this.board[y][x] === PieceType.RED) {
+                        // 红色棋子保持红色显示
+                        prefab = this.redPrefab;
+                    } else {
+                        // 黑子和白子显示为当前玩家的颜色
+                        prefab = this.currentPlayer === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
+                    }
+                    
                     if (prefab) {
                         const pieceNode = instantiate(prefab);
                         const worldPos = this.boardToWorldPosition(x, y);
@@ -647,7 +657,17 @@ export class funmode extends Component {
 
                 // 恢复原始棋子显示
                 if (this.originalBoard[y][x] !== PieceType.EMPTY) {
-                    const prefab = this.originalBoard[y][x] === PieceType.BLACK ? this.blackPrefab : this.whitePrefab;
+                    let prefab: Prefab;
+                    
+                    // 根据原始棋子类型选择预制体
+                    if (this.originalBoard[y][x] === PieceType.RED) {
+                        prefab = this.redPrefab;
+                    } else if (this.originalBoard[y][x] === PieceType.BLACK) {
+                        prefab = this.blackPrefab;
+                    } else {
+                        prefab = this.whitePrefab;
+                    }
+                    
                     if (prefab) {
                         const pieceNode = instantiate(prefab);
                         const worldPos = this.boardToWorldPosition(x, y);
